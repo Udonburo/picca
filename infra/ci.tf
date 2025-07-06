@@ -37,5 +37,5 @@ resource "google_cloudbuild_trigger" "main-branch-trigger" {
     }
   }
 
-  filename = "cloudbuild.yaml"
+  filename = "infra/cloudbuild.yaml"
 }

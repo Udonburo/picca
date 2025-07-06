@@ -1,0 +1,14 @@
+# umm
+infra/terraform-sa.json
+infra/*.tf.json
+infra/*.json
+*.json
+gcp-sa-key.json
+gcp-sa-key.b64
+
+
+# ─ Terraform ─
+.terraform/
+infra/.terraform/
+*.tfstate*
+*.tfstate.*
