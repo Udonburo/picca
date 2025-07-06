@@ -1,0 +1,19 @@
+steps:
+  - id: 'tf-init'
+    name: hashicorp/terraform:1.8
+    entrypoint: terraform
+    args: ['init', '-input=false']
+    dir: 'infra'
+
+  - id: 'tf-plan'
+    name: hashicorp/terraform:1.8
+    entrypoint: terraform
+    args: ['plan', '-no-color', '-input=false', '-out=plan.tfout']
+    dir: 'infra'
+
+substitutions:
+  _TF_ACTION: 'plan'   # 将来 apply に切り替えたい時用
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+serviceAccount: projects/-/serviceAccounts/terraform-sa@picca-dev-464810.iam.gserviceaccount.com
