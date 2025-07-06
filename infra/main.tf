@@ -1,12 +1,18 @@
 terraform {
+
   backend "gcs" {
-    bucket = "terraform-state-picca-dev-464810" # さっき作ったバケット名
+    bucket = "terraform-state-picca-dev-464810"
     prefix = "terraform/state"
   }
 
   required_providers {
     google = {
       source  = "hashicorp/google"
+      version = "~> 5.0"
+    }
+
+    google-beta = {
+      source  = "hashicorp/google-beta"
       version = "~> 5.0"
     }
   }
@@ -22,16 +28,13 @@ provider "google" {
   region  = local.region
 }
 
-provider "google" {
-  alias   = "beta"
+provider "google-beta" {
   project = local.project_id
   region  = local.region
 }
 
-# --- Artifact Registry ---
 
 resource "google_artifact_registry_repository" "backend" {
-  provider      = google.beta
   location      = local.region
   repository_id = "picca-backend"
   description   = "Docker repository for picca backend"
