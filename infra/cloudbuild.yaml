@@ -16,4 +16,4 @@ substitutions:
 
 options:
   logging: CLOUD_LOGGING_ONLY
-serviceAccount: projects/-/serviceAccounts/terraform-sa@picca-dev-464810.iam.gserviceaccount.com
+# serviceAccount: projects/-/serviceAccounts/terraform-sa@picca-dev-464810.iam.gserviceaccount.com
