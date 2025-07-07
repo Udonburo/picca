@@ -1,18 +1,14 @@
-# ── ci.tf ────────────────────────────────────────────────────────────────
-# Cloud Build Trigger と GitHub Repository 連携
-
-# プロジェクト情報（番号だけ欲しい）
 data "google_project" "this" {}
 
 locals {
-  # Cloud Build デフォルトSA
-  cloudbuild_sa_name = "projects/-/serviceAccounts/${data.google_project.this.number}@cloudbuild.gserviceaccount.com"
+  project_number = data.google_project.this.number
+  cicd_sa_name   = "projects/${local.project_number}/serviceAccounts/terraform-sa@${local.project_id}.iam.gserviceaccount.com"
 }
 
-# GitHub ↔ Cloud Build Repository 接続
+# GitHub ↔ Cloud Build Repository
 resource "google_cloudbuildv2_repository" "picca_repository" {
   provider          = google-beta
-  project           = local.project_id   # ← main.tf の locals を参照
+  project           = local.project_id
   location          = local.region
   name              = "picca-repo"
 
@@ -20,13 +16,15 @@ resource "google_cloudbuildv2_repository" "picca_repository" {
   remote_uri        = "https://github.com/Udonburo/picca.git"
 }
 
-# メインブランチ用 Cloud Build Trigger
+# Trigger
 resource "google_cloudbuild_trigger" "main-branch-trigger" {
   provider        = google-beta
   project         = local.project_id
   location        = local.region
   name            = "main-branch-trigger"
 
+
+  service_account = "projects/${local.project_id}/serviceAccounts/terraform-sa@${local.project_id}.iam.gserviceaccount.com"
 
   repository_event_config {
     repository = google_cloudbuildv2_repository.picca_repository.id
