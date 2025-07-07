@@ -27,8 +27,6 @@ resource "google_cloudbuild_trigger" "main-branch-trigger" {
   location        = local.region
   name            = "main-branch-trigger"
 
-  # 完全修飾名を指定
-  service_account = local.cloudbuild_sa_name
 
   repository_event_config {
     repository = google_cloudbuildv2_repository.picca_repository.id
