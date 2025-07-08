@@ -1,3 +1,6 @@
+options:
+  machineType: "E2_SMALL"
+
 steps:
   - id: 'tf-init'
     name: hashicorp/terraform:1.8
@@ -16,4 +19,3 @@ substitutions:
 
 options:
   logging: CLOUD_LOGGING_ONLY
-# serviceAccount: projects/-/serviceAccounts/terraform-sa@picca-dev-464810.iam.gserviceaccount.com
