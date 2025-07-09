@@ -22,14 +22,19 @@ steps:
       - |
         npm ci && npm test -- --ci
 
-  # 2. Docker イメージをビルド＆プッシュ
-  - id: 'build-image'
-    name: 'gcr.io/cloud-builders/docker'
+  # 2. Docker 
+  - id: "build-and-push-image"
+    name: "gcr.io/cloud-builders/docker"
+    entrypoint: "bash"
     args:
-      - build
-      - '-t'
-      - "gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA"
-      - "."
+      - "-c"
+      - |
+        docker build \
+          -t gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA \
+          .
+        docker push \
+          gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA
+
 
   # 3. Cloud Run へ自動デプロイ
   - id: 'deploy-to-cloud-run'
