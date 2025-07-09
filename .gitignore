@@ -6,9 +6,8 @@ infra/*.json
 gcp-sa-key.json
 gcp-sa-key.b64
 
-
 # ─ Terraform ─
 .terraform/
 infra/.terraform/
 *.tfstate*
-*.tfstate.*
+node_modules/
