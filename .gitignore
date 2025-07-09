@@ -3,8 +3,10 @@ infra/terraform-sa.json
 infra/*.tf.json
 infra/*.json
 *.json
+!package-lock.json
 gcp-sa-key.json
 gcp-sa-key.b64
+
 
 # ─ Terraform ─
 .terraform/
