@@ -10,5 +10,5 @@ RUN npm ci --omit=dev
 # 3. ソースコードをコピー
 COPY . .
 
-# 4. （ここは好きに変えてOK）サンプルとして math.js を実行
+# 4. サンプルとして math.js を実行
 CMD ["node", "src/math.js"]
