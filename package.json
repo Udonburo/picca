@@ -1,0 +1,9 @@
+{
+  "type": "module",
+  "scripts": {
+    "test": "jest --ci"
+  },
+  "devDependencies": {
+    "jest": "^30"
+  }
+}
