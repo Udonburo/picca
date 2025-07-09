@@ -9,6 +9,4 @@ gcp-sa-key.b64
 # ─ Terraform ─
 .terraform/
 infra/.terraform/
-*.tfstate*node_modules/
 
-*.tfstate.*
