@@ -11,4 +11,4 @@ RUN npm ci --omit=dev
 COPY . .
 
 # 4. 起動コマンドを server.js に変更
-CMD ["node", "src/server.js"]
+CMD ["node", "src/server.cjs"]
