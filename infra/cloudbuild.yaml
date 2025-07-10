@@ -28,7 +28,7 @@ steps:
     args:
       - '-c'
       - |
-        echo "Running tests with DB_PASSWORD=$DB_PASSWORD"
+        echo "Running tests with DB_PASSWORD=$$DB_PASSWORD"
         npm ci && npm test -- --ci
 
   # 2. Docker イメージをビルド＆プッシュ
