@@ -1,5 +1,11 @@
 # infra/cloudbuild.yaml
 
+availableSecrets:
+  secretManager:
+    - versionName: "projects/$PROJECT_ID/secrets/DB_PASSWORD/versions/latest"
+      env: "DB_PASSWORD"
+
+
 substitutions:
   _TF_ACTION: 'plan'           # 将来 apply に切り替えたい時用
   _REGION: 'asia-northeast1'   # デプロイ先リージョン
@@ -12,17 +18,21 @@ options:
   logging: CLOUD_LOGGING_ONLY
   machineType: UNSPECIFIED
 
+
 steps:
-  # 1. ユニットテストを実行
+  # 1. ユニットテストを実行 (Secret を環境変数として注入)
   - id: 'run-unit-tests'
     name: 'node:20'
     entrypoint: 'bash'
+    env:
+      - 'DB_PASSWORD=${DB_PASSWORD}'
     args:
       - '-c'
       - |
+        echo "Running tests with DB_PASSWORD=$DB_PASSWORD"
         npm ci && npm test -- --ci
 
-  # 2. Docker 
+  # 2. Docker イメージをビルド＆プッシュ
   - id: "build-and-push-image"
     name: "gcr.io/cloud-builders/docker"
     entrypoint: "bash"
@@ -35,8 +45,8 @@ steps:
         docker push \
           gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA
 
+  # 3. Cloud Run へ自動デプロイ (Secret をコンテナへマウント)
 
-  # 3. Cloud Run へ自動デプロイ
   - id: 'deploy-to-cloud-run'
     name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
@@ -47,6 +57,8 @@ steps:
           --image gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA \
           --region $_REGION \
           --platform managed \
+          --set-secrets=DB_PASSWORD=DB_PASSWORD:latest \
+          --allow-unauthenticated \
           --quiet
 
   # 4. Terraform 初期化
