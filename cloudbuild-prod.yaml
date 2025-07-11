@@ -8,7 +8,7 @@ availableSecrets:
 substitutions:
   _SERVICE: 'picca-prod'
   _REGION: 'asia-northeast1'
-  _TF_ACTION: 'plan'
+  _TF_ACTION: 'apply'
 
 images:
   - "gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA"
