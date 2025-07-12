@@ -64,13 +64,12 @@ steps:
       - '-input=false'
     dir: 'infra'
 
-  # 5. Terraform Plan（apply 自動化は次フェーズで）
-  - id: 'tf-plan'
+  # 5. Terraform apply
+  - id: 'tf-apply'
     name: 'hashicorp/terraform:1.8'
     entrypoint: 'terraform'
     args:
-      - 'plan'
-      - '-no-color'
-      - '-input=false'
-      - '-out=plan.tfout'
+      - 'apply'
+      - '-auto-approve'
     dir: 'infra'
+
