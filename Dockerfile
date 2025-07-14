@@ -1,14 +1,25 @@
-FROM node:20-alpine
-
-# 1. 作業ディレクトリ
+# ---------- Build stage ----------
+FROM node:20-alpine AS builder
 WORKDIR /app
 
-# 2. package*.json を先にコピーして依存解決
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+# 依存解決だけ先に
+COPY app/package*.json ./
+RUN npm ci
 
-# 3. ソースコードをコピー
-COPY . .
+# ソースとビルド
+COPY app ./app
+WORKDIR /app/app
+RUN npm run build
 
-# 4. 起動コマンドを server.js に変更
-CMD ["node", "src/server.cjs"]
+# ---------- Run stage ----------
+FROM gcr.io/distroless/nodejs20-debian12
+WORKDIR /app
+# builder からビルド成果物一式をコピー
+COPY --from=builder /app/app ./
+
+# Cloud Run が渡してくる PORT を拾う
+ENV PORT=8080 NODE_ENV=production
+EXPOSE 8080
+
+# Next.js のランタイムサーバーで起動
+CMD ["npm","start"]
