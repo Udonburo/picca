@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build && tsc -p tsconfig.server.json",
-    "start": "cross-env NODE_ENV=production node server.js",
-    "lint": "next lint"
+    "build": "next build",
+    "start": "cross-env NODE_ENV=production next start -p 8080",
+    "lint": "next lint",
+    "test": "jest"
   },
   "dependencies": {
     "express": "^5.1.0",
