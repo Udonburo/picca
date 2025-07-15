@@ -4,6 +4,8 @@ infra/*.tf.json
 infra/*.json
 *.json
 !package-lock.json
+!package.json
+!app/package.json
 gcp-sa-key.json
 gcp-sa-key.b64
 
@@ -12,3 +14,7 @@ gcp-sa-key.b64
 .terraform/
 infra/.terraform/
 
+
+node_modules/
+dist/
+.next/            # Next.js build output
