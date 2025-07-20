@@ -8,7 +8,9 @@ export async function GET() {
     const r = await fetch(`${apiUrl}/v1/ping`);
     const data = await r.json();
     return NextResponse.json(data, { status: 200 });
-  } catch (e) {
+  } catch (error) {
+    // 変数 error を使ってログを出力
+    console.error('Upstream ping failed:', error);
     return NextResponse.json(
       { error: 'upstream ping failed' },
       { status: 502 },

@@ -3,26 +3,23 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # 1. 依存解決
-COPY app/package.json app/package-lock.json ./
-RUN npm ci
+COPY package*.json ./
+RUN npm ci --prefer-offline --no-audit
 
 # 2. ソースコピー＋ビルド
-COPY app/ ./
-RUN npm run build
+COPY . .
+RUN npm run build       # `next build`
 
 # ---------- Run stage ----------
-FROM node:20-alpine AS runner   
-# 実行ステージ（npm が入っている）
-
+FROM node:20-alpine AS runner
 WORKDIR /app
+ENV NODE_ENV=production PORT=8080
 
-# ビルド成果物＋node_modules をコピー
-COPY --from=builder /app ./
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./static
+COPY --from=builder /app/public ./public
 
-# Cloud Run 用
-ENV NODE_ENV=production
-ENV PORT=8080
 EXPOSE 8080
 
-# Next.js を npm 経由で起動
-CMD ["sh", "-c", "npm start"]
+CMD ["node", "server.js"]
+
