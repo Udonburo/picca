@@ -1,7 +1,12 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Cloud Run 向けに軽量な standalone 出力
+  output: 'standalone',
+
+  // ↓ 既存オプションを追記するならここ
+  // reactStrictMode: true,
+  // experimental: { appDir: true },
 };
 
 export default nextConfig;
