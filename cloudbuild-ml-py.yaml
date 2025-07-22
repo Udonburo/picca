@@ -9,5 +9,7 @@
       - '.'
 images:
   - '-docker.pkg.dev//picca/picca-ml-py-stg:latest'
+options:
+  logging: CLOUD_LOGGING_ONLY
 substitutions:
   _REGION: asia-northeast1
