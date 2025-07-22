@@ -1,0 +1,13 @@
+﻿steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'Build-ML-Py'
+    dir: 'services/ml-py'
+    args:
+      - build
+      - -t
+      - '-docker.pkg.dev//picca/picca-ml-py-stg:latest'
+      - '.'
+images:
+  - '-docker.pkg.dev//picca/picca-ml-py-stg:latest'
+substitutions:
+  _REGION: asia-northeast1
