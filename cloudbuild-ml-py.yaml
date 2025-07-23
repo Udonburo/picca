@@ -9,9 +9,6 @@
       - '.'
 images:
   - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/picca/picca-ml-py-stg:latest'
-+options:
-+  logging: CLOUD_LOGGING_ONLY
-  - '-docker.pkg.dev//picca/picca-ml-py-stg:latest'
 options:
   logging: CLOUD_LOGGING_ONLY
 substitutions:
