@@ -5,10 +5,10 @@
     args:
       - build
       - -t
-      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/picca/picca-ml-py-stg:latest'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/picca-backend/picca-ml-py-stg:latest'
       - '.'
 images:
-  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/picca/picca-ml-py-stg:latest'
+  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/picca-backend/picca-ml-py-stg:latest'
 options:
   logging: CLOUD_LOGGING_ONLY
 substitutions:
