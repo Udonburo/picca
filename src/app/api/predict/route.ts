@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     if (!mlRes.ok) throw new Error('ML service error');
     const data = await mlRes.json();
     return NextResponse.json(data, { status: 200 });
-  } catch (e) {
+  } catch {
     return NextResponse.json({ message: 'Upstream ML Error' }, { status: 502 });
   }
 }
