@@ -1,5 +1,5 @@
 # services/ml-py/main.py
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request
 
 app = FastAPI()
 
