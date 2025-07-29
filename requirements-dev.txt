@@ -1,0 +1,5 @@
+torch
+onnxruntime
+onnx
+pytest
+ruff

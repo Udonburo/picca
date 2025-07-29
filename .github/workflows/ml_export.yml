@@ -1,4 +1,5 @@
 name: ML Export
+
 on:
   workflow_dispatch:
     inputs:
@@ -15,6 +16,26 @@ jobs:
   export:
     runs-on: ubuntu-latest
     steps:
+
+      # 👉 1. リポジトリをチェックアウト
+      - uses: actions/checkout@v4
+
+      # 👉 2. GCP 認証
+      - id: auth
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_JSON }}
+
+      # 👉 3. gcloud / gsutil をインストール
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      # 👉 4. Python 依存インストール
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
@@ -24,16 +45,31 @@ jobs:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
           service_account_key: ${{ secrets.GCP_SA_JSON }}
           export_default_credentials: true
+
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
           pip install torch onnx onnxruntime
+
+
+      # 👉 5. スクリプト実行 & アップロード
+      - name: Prepare scripts
+        run: chmod +x scripts/hash_model.sh
+
+      - name: Export ONNX
+        run: python scripts/export_onnx.py --ckpt ${{ inputs.ckpt_path }} --out model.onnx
+
+      - name: Hash
+        run: bash scripts/hash_model.sh model.onnx
+
+
       - name: Prepare scripts
         run: chmod +x scripts/hash_model.sh
       - name: Export ONNX
         run: python scripts/export_onnx.py --ckpt ${{ inputs.ckpt_path }} --out model.onnx
       - name: Hash
         run: bash scripts/hash_model.sh model.onnx
+
       - name: Upload to GCS
         run: |
           gsutil cp model.onnx gs://picca-models/models/dcv/${{ inputs.tag }}/model.onnx
