@@ -9,6 +9,7 @@ substitutions:
   _TF_ACTION: 'plan'
   _REGION: 'asia-northeast1'
   _SERVICE: 'picca-stg'
+  _PROJECT: 'picca-dev-464810'
 
 images:
   - "gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA"
@@ -67,5 +68,11 @@ steps:
   - id: 'tf-plan'
     name: 'hashicorp/terraform:1.8'
     entrypoint: 'terraform'
-    args: ['plan', '-no-color', '-input=false', '-out=plan.tfout']
+    args:
+      - 'plan'
+      - '-no-color'
+      - '-input=false'
+      - '-out=plan.tfout'
+      - '-var=project=${_PROJECT}'
+      - '-var=region=${_REGION}'
     dir: 'infra'
