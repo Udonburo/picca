@@ -9,6 +9,7 @@ substitutions:
   _SERVICE: 'picca-prod'
   _REGION: 'asia-northeast1'
   _TF_ACTION: 'apply'
+  _PROJECT: 'picca-dev-464810'
 
 images:
   - "gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA"
@@ -71,5 +72,7 @@ steps:
     args:
       - 'apply'
       - '-auto-approve'
+      - '-var=project=${_PROJECT}'
+      - '-var=region=${_REGION}'
     dir: 'infra'
 
