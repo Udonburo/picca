@@ -16,3 +16,5 @@ resource "google_storage_bucket" "model_storage" {
     }
   }
 }
+
+
