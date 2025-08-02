@@ -1,0 +1,44 @@
+from __future__ import annotations
+
+import hashlib
+import os
+from functools import lru_cache
+from typing import Tuple
+
+import gcsfs
+import numpy as np
+import onnxruntime as ort
+
+from .utils.preproc import uniform_sample
+
+_MODEL_URI = os.getenv("_MODEL_URI", "model.onnx")
+_MODEL_SHA256 = os.getenv("_MODEL_SHA256")
+
+
+def _load_model_bytes(uri: str) -> bytes:
+    if uri.startswith("gs://"):
+        fs = gcsfs.GCSFileSystem()
+        with fs.open(uri, "rb") as f:
+            return f.read()
+    with open(uri, "rb") as f:
+        return f.read()
+
+
+@lru_cache(maxsize=1)
+def get_session() -> ort.InferenceSession:
+    data = _load_model_bytes(_MODEL_URI)
+    if _MODEL_SHA256:
+        digest = hashlib.sha256(data).hexdigest()
+        if digest != _MODEL_SHA256:
+            raise ValueError("model sha256 mismatch")
+    return ort.InferenceSession(data, providers=["CPUExecutionProvider"])
+
+
+def predict(arr: np.ndarray | list[list[float]]) -> Tuple[int, float, float, float]:
+    session = get_session()
+    sampled = uniform_sample(arr, 75).astype(np.float32)
+    flat = sampled.reshape(1, -1)
+    outputs = session.run(None, {session.get_inputs()[0].name: flat})[0][0]
+    score = int(round(float(outputs[0] * 100)))
+    metrics = [float(x) for x in outputs[1:4]]
+    return (score, *metrics)
