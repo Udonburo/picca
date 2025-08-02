@@ -1,7 +1,8 @@
-﻿steps:
+# services/ml_py/Dockerfile
+steps:
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Build-ML-Py'
-    dir: 'services/ml-py'
+    dir: 'services/ml_py'
     args:
       - build
       - -t
