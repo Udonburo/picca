@@ -6,3 +6,4 @@ pytest
 ruff
 fastapi
 pydantic
+httpx
