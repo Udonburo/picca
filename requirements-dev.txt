@@ -1,5 +1,8 @@
 torch
 onnxruntime
 onnx
+numpy
 pytest
 ruff
+fastapi
+pydantic
