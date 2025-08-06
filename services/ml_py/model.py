@@ -35,15 +35,21 @@ def get_session() -> ort.InferenceSession:
 
 
 def predict(arr: np.ndarray | list[list[float]]) -> Tuple[int, float, float, float]:
-    session     = get_session()
-    input_size  = session.get_inputs()[0].shape[1]  # 例: 1088
-    target      = input_size // 2                   # XY なので ÷2
-    sampled     = uniform_sample(arr, target).astype(np.float32)
-    flat        = sampled.reshape(1, -1)
+    session = get_session()
+    in_shape = session.get_inputs()[0].shape
+    input_size = in_shape[1]
 
-    outputs     = session.run(None, {session.get_inputs()[0].name: flat})[0][0]
-    score_raw = float(outputs[0])
-    score = int(np.clip(score_raw * 100, 0, 100))
+    if input_size is None:
+        target = 75
+    else:
+        target = input_size // 2
+        
+    sampled = uniform_sample(arr, target).astype(np.float32)
+    flat    = sampled.reshape(1, -1)
+
+    outputs = session.run(None, {session.get_inputs()[0].name: flat})[0][0]
+    score   = int(np.clip(float(outputs[0]) * 100, 0, 100))
     metrics = np.clip(outputs[1:4], 0.0, 1.0)
+
     return (score, float(metrics[0]), float(metrics[1]), float(metrics[2]))
 
