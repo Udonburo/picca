@@ -71,7 +71,7 @@ func scoreHandler(c *gin.Context) {
 		return
 	}
 
-	upstreamReq, err := http.NewRequest(http.MethodPost, mlURL+"/predict", bytes.NewReader(body))
+	upstreamReq, err := http.NewRequestWithContext(c.Request.Context(), http.MethodPost, mlURL+"/predict", bytes.NewReader(body))
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "ml upstream error", "reason_code": "UPSTREAM_FAILURE"})
 		logReq(reqID, http.StatusBadGateway, 0)
@@ -111,6 +111,7 @@ func scoreHandler(c *gin.Context) {
 }
 
 func main() {
+	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 
 	r.POST("/api/v1/score", scoreHandler)
