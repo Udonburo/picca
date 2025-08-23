@@ -1,0 +1,35 @@
+name: repo-lint
+on:
+  pull_request:
+    paths:
+      - '**/*.yml'
+      - '**/*.yaml'
+      - '.github/workflows/**'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Actions 配下は kebab-case + .yml
+      - name: Check workflow files are kebab-case + .yml
+        run: |
+          set -euo pipefail
+          bad=$(ls .github/workflows/*.yml 2>/dev/null | grep -E '_' || true)
+          if [ -n "$bad" ]; then
+            echo "Workflow files must be kebab-case (.yml). Offenders:"
+            echo "$bad"
+            exit 1
+          fi
+
+      # Actions 以外では .yml を禁止（→ .yaml を使う）
+      - name: Disallow .yml outside workflows (use .yaml)
+        run: |
+          set -euo pipefail
+          bad=$(git ls-files '*.yml' | grep -v '^\.github/workflows/' || true)
+          if [ -n "$bad" ]; then
+            echo ".yml is only allowed under .github/workflows/. Offenders:"
+            echo "$bad"
+            exit 1
+          fi

@@ -65,3 +65,11 @@ next-env.d.ts
 # local test artifacts
 dummy.pt
 model.onnx
+
+# Go build outputs
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+

@@ -1,0 +1,57 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: build-ml-py
+    dir: services/ml_py
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/picca-backend/picca-ml-py-prod:latest
+      - .
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy-ml-py
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - picca-ml-py-prod
+      - --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/picca-backend/picca-ml-py-prod:latest
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated          # HACKATHON ONLY; see PR note below
+      - --concurrency=4
+      - --cpu=2
+      - --memory=2Gi
+      - --set-env-vars=_MODEL_URI=${_MODEL_URI},_MODEL_SHA256=${_MODEL_SHA256},OMP_NUM_THREADS=2,PYTHONUNBUFFERED=1
+      # Optionally pin a runtime SA if already provisioned via Terraform:
+      # - --service-account=${_RUNTIME_SA}
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: smoke-test
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        ML_URL=$(gcloud run services describe picca-ml-py-prod --region ${_REGION} --format='value(status.url)')
+        for i in {1..10}; do
+          if curl -sf -X POST "$$ML_URL/predict" -H "Content-Type: application/json" \
+            -d '{"keypoints":[{"x":0.1,"y":0.2}],"fps":30}' >/dev/null; then
+            echo "smoke OK"; exit 0
+          fi
+          echo "waiting for revision to be ready... ($i/10)"; sleep 3
+        done
+        echo "smoke-test failed"; exit 1
+
+images:
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/picca-backend/picca-ml-py-prod:latest
+
+substitutions:
+  _REGION: asia-northeast1
+  TAG_NAME: v0.1.1
+  _MODEL_URI: gs://picca-models/models/dcv/${TAG_NAME}/model.onnx
+  # _MODEL_SHA256 provided by the trigger at run time (64 hex). Example: 9f3c...
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: "3600s"
