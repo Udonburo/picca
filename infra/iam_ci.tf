@@ -1,5 +1,3 @@
-data "google_project" "this" {}
-
 locals {
   cloudbuild_sa = "${data.google_project.this.number}@cloudbuild.gserviceaccount.com"
 }
