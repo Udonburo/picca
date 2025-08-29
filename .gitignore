@@ -73,3 +73,19 @@ model.onnx
 *.dylib
 *.test
 
+
+# ML artifacts
+*.onnx
+*.onnx.sha256
+
+
+# Terraform local files
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/crash.log
+**/tfplan
+**/*.tfplan
+**/*.tfvars
+infra/tfplan
+
