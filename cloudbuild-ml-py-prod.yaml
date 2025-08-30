@@ -4,6 +4,10 @@ steps:
     dir: services/ml_py
     args: ['build','-t','${_REGION}-docker.pkg.dev/${PROJECT_ID}/picca-backend/picca-ml-py-prod:latest','.']
 
+  - name: gcr.io/cloud-builders/docker
+    id: push-ml-py
+    args: ['push','${_REGION}-docker.pkg.dev/${PROJECT_ID}/picca-backend/picca-ml-py-prod:latest']
+
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: validate-inputs
     entrypoint: bash
@@ -28,10 +32,12 @@ steps:
       - --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/picca-backend/picca-ml-py-prod:latest
       - --region=${_REGION}
       - --platform=managed
-      - --allow-unauthenticated          # HACKATHON ONLY; 後日S2S認可へ
+      - --quiet
+      - --allow-unauthenticated          # HACKATHON ONLY; 後でS2S認可へ
       - --concurrency=4
       - --cpu=2
       - --memory=2Gi
+      # substitutions内相互参照は不可なので、ここで直に組み立てる
       - --set-env-vars=_MODEL_URI=gs://picca-models/models/dcv/${_TAG_NAME}/model.onnx,_MODEL_SHA256=${_MODEL_SHA256},OMP_NUM_THREADS=2,PYTHONUNBUFFERED=1
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
@@ -51,13 +57,12 @@ steps:
         done
         echo "smoke-test failed"; exit 1
 
-images:
-  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/picca-backend/picca-ml-py-prod:latest
+# ← images: は削除（ダブルプッシュ防止）
 
 substitutions:
   _REGION: asia-northeast1
-  _TAG_NAME: v0.1.1
-  _MODEL_SHA256: ' '   # 実行時に必ず上書き
+  _TAG_NAME: v0.1.1            # 実行時に上書き可
+  _MODEL_SHA256: ' '           # 実行時に必ず渡す
 
 options:
   logging: CLOUD_LOGGING_ONLY
