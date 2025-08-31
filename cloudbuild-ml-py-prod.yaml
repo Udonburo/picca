@@ -15,11 +15,22 @@ steps:
       - -c
       - |
         set -euo pipefail
-        if ! echo "${_MODEL_SHA256}" | grep -Eq '^[0-9a-f]{64}$'; then
-          echo "Invalid _MODEL_SHA256: must be 64 hex chars"; exit 1
+
+        SHA="$(printf '%s' "${_MODEL_SHA256}" | tr -d '\r\n')"
+        TAG="${_TAG_NAME:-}"
+
+        echo "DEBUG _TAG_NAME=${TAG}"
+        echo "DEBUG _MODEL_SHA256=${SHA}"
+        echo "DEBUG _MODEL_SHA256_LEN=${#SHA}"
+
+        if ! echo "${SHA}" | grep -Eq '^[0-9A-Fa-f]{64}$'; then
+          echo "Invalid _MODEL_SHA256: must be 64 hex chars (got len=${#SHA})"
+          exit 1
         fi
-        if [ -z "${_TAG_NAME}" ]; then
-          echo "_TAG_NAME must not be empty"; exit 1
+
+        if [ -z "${TAG}" ]; then
+          echo "_TAG_NAME must not be empty"
+          exit 1
         fi
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
@@ -57,7 +68,7 @@ steps:
         done
         echo "smoke-test failed"; exit 1
 
-# ← images: は削除（ダブルプッシュ防止）
+# images: は削除（ダブルプッシュ防止）
 
 substitutions:
   _REGION: asia-northeast1
