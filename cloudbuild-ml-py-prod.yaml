@@ -10,31 +10,6 @@ steps:
     args: ['push','${_REGION}-docker.pkg.dev/${PROJECT_ID}/picca-backend/picca-ml-py-prod:latest']
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    id: validate-inputs
-    entrypoint: bash
-
-    env:
-      - CB_SHA=${_MODEL_SHA256}
-      - CB_TAG=${_TAG_NAME}
-    args:
-      - -c
-      - |
-        set -euo pipefail
-        SHA_VAL="$(printf '%s' "$CB_SHA" | tr -d '\r\n')"
-        TAG="$CB_TAG"
-        LEN="$(printf '%s' "$SHA_VAL" | wc -c)"
-        echo "DEBUG TAG=$TAG"
-        echo "DEBUG SHA=$SHA_VAL"
-        echo "DEBUG SHA_LEN=$LEN"
-        if ! echo "$SHA_VAL" | grep -Eq '^[0-9A-Fa-f]{64}$'; then
-          echo "Invalid SHA: must be 64 hex chars (got len=$LEN)"; exit 1
-        fi
-        if [ -z "$TAG" ]; then
-          echo "TAG must not be empty"; exit 1
-        fi
-
-
-  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: deploy-ml-py
     entrypoint: gcloud
     args:

@@ -1,0 +1,14 @@
+@"
+.git
+.gitignore
+**/.DS_Store
+**/__pycache__/
+**/*.pyc
+node_modules/
+
+!services/**
+"@ | Set-Content -Encoding UTF8 .gcloudignore
+
+git add .gcloudignore
+git commit -m "ci: add .gcloudignore and ensure services/ included"
+git push
