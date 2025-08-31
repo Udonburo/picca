@@ -1,5 +1,5 @@
 steps:
-  # Build: ルートをコンテキストにし、Dockerfile はパス指定
+  # Build: ルートをコンテキストに、Dockerfile は明示指定
   - name: gcr.io/cloud-builders/docker
     id: build-ml-py
     args: ['build','-f','services/ml_py/Dockerfile',
@@ -12,22 +12,27 @@ steps:
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: validate-inputs
     entrypoint: bash
+
+    env:
+      - CB_SHA=${_MODEL_SHA256}
+      - CB_TAG=${_TAG_NAME}
     args:
       - -c
       - |
         set -euo pipefail
-        SHA="$(printf '%s' "${_MODEL_SHA256}" | tr -d '\r\n')"
-        TAG="${_TAG_NAME:-}"
-        LEN="$(printf '%s' "$SHA" | wc -c)"
-        echo "DEBUG _TAG_NAME=$TAG"
-        echo "DEBUG _MODEL_SHA256=$SHA"
-        echo "DEBUG _MODEL_SHA256_LEN=$LEN"
-        if ! echo "$SHA" | grep -Eq '^[0-9A-Fa-f]{64}$'; then
-          echo "Invalid _MODEL_SHA256: must be 64 hex chars (got len=$LEN)"; exit 1
+        SHA_VAL="$(printf '%s' "$CB_SHA" | tr -d '\r\n')"
+        TAG="$CB_TAG"
+        LEN="$(printf '%s' "$SHA_VAL" | wc -c)"
+        echo "DEBUG TAG=$TAG"
+        echo "DEBUG SHA=$SHA_VAL"
+        echo "DEBUG SHA_LEN=$LEN"
+        if ! echo "$SHA_VAL" | grep -Eq '^[0-9A-Fa-f]{64}$'; then
+          echo "Invalid SHA: must be 64 hex chars (got len=$LEN)"; exit 1
         fi
         if [ -z "$TAG" ]; then
-          echo "_TAG_NAME must not be empty"; exit 1
+          echo "TAG must not be empty"; exit 1
         fi
+
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: deploy-ml-py
