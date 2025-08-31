@@ -14,7 +14,7 @@ RUN if [ -f /app/requirements.txt ]; then \
       pip install --no-cache-dir fastapi "uvicorn[standard]" onnxruntime numpy gcsfs pydantic ; \
     fi
 
-# パッケージルート "services" をまるっとコピー（←これが肝）
+# パッケージルート "services" を丸ごとコピー（←これが肝）
 COPY services /app/services
 
 EXPOSE 8080
