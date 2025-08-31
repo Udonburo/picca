@@ -1,8 +1,9 @@
 steps:
   - name: gcr.io/cloud-builders/docker
     id: build-ml-py
-    dir: services/ml_py
-    args: ['build','-t','${_REGION}-docker.pkg.dev/${PROJECT_ID}/picca-backend/picca-ml-py-prod:latest','.']
+    # ルートをビルドコンテキストに、Dockerfileは明示指定
+    args: ['build','-f','services/ml_py/Dockerfile',
+           '-t','${_REGION}-docker.pkg.dev/${PROJECT_ID}/picca-backend/picca-ml-py-prod:latest','.']
 
   - name: gcr.io/cloud-builders/docker
     id: push-ml-py
@@ -15,22 +16,17 @@ steps:
       - -c
       - |
         set -euo pipefail
-
         SHA="$(printf '%s' "${_MODEL_SHA256}" | tr -d '\r\n')"
         TAG="${_TAG_NAME:-}"
-
-        echo "DEBUG _TAG_NAME=${TAG}"
-        echo "DEBUG _MODEL_SHA256=${SHA}"
-        echo "DEBUG _MODEL_SHA256_LEN=${#SHA}"
-
-        if ! echo "${SHA}" | grep -Eq '^[0-9A-Fa-f]{64}$'; then
-          echo "Invalid _MODEL_SHA256: must be 64 hex chars (got len=${#SHA})"
-          exit 1
+        LEN="$(printf '%s' "$SHA" | wc -c)"
+        echo "DEBUG _TAG_NAME=$TAG"
+        echo "DEBUG _MODEL_SHA256=$SHA"
+        echo "DEBUG _MODEL_SHA256_LEN=$LEN"
+        if ! echo "$SHA" | grep -Eq '^[0-9A-Fa-f]{64}$'; then
+          echo "Invalid _MODEL_SHA256: must be 64 hex chars (got len=$LEN)"; exit 1
         fi
-
-        if [ -z "${TAG}" ]; then
-          echo "_TAG_NAME must not be empty"
-          exit 1
+        if [ -z "$TAG" ]; then
+          echo "_TAG_NAME must not be empty"; exit 1
         fi
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
@@ -44,11 +40,10 @@ steps:
       - --region=${_REGION}
       - --platform=managed
       - --quiet
-      - --allow-unauthenticated          # HACKATHON ONLY; 後でS2S認可へ
       - --concurrency=4
       - --cpu=2
       - --memory=2Gi
-      # substitutions内相互参照は不可なので、ここで直に組み立てる
+      # substitutions相互参照は不可なので、ここでURIを直組み
       - --set-env-vars=_MODEL_URI=gs://picca-models/models/dcv/${_TAG_NAME}/model.onnx,_MODEL_SHA256=${_MODEL_SHA256},OMP_NUM_THREADS=2,PYTHONUNBUFFERED=1
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
@@ -59,16 +54,16 @@ steps:
       - |
         set -euo pipefail
         ML_URL=$(gcloud run services describe picca-ml-py-prod --region ${_REGION} --format='value(status.url)')
+        TOKEN=$(gcloud auth print-identity-token)
         for i in {1..10}; do
-          if curl -sf -X POST "$$ML_URL/predict" -H "Content-Type: application/json" \
+          if curl -sf -H "Authorization: Bearer $$TOKEN" -H "Content-Type: application/json" \
+            -X POST "$$ML_URL/predict" \
             -d '{"keypoints":[{"x":0.1,"y":0.2}],"fps":30}' >/dev/null; then
             echo "smoke OK"; exit 0
           fi
           echo "waiting for revision to be ready... ($$i/10)"; sleep 3
         done
         echo "smoke-test failed"; exit 1
-
-# images: は削除（ダブルプッシュ防止）
 
 substitutions:
   _REGION: asia-northeast1
