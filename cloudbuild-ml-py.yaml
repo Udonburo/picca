@@ -1,10 +1,10 @@
-# services/ml_py/Dockerfile
 steps:
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Build-ML-Py'
-    dir: 'services/ml_py'
     args:
       - build
+      - -f
+      - services/ml_py/Dockerfile
       - -t
       - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/picca-backend/picca-ml-py-stg:latest'
       - '.'
