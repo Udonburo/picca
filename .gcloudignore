@@ -1,10 +1,11 @@
-@"
+# 既存の除外は活かしつつ、services/ は必ず送る
+# （例：node_modulesや.gitは除外してOK）
 .git
 .gitignore
 **/.DS_Store
 **/__pycache__/
 **/*.pyc
 node_modules/
-
+!services/
 !services/**
-"@ | Set-Content -Encoding UTF8 .gcloudignore
+

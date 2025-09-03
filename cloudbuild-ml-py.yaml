@@ -1,4 +1,9 @@
 steps:
+  - name: python:3.11
+    id: "unit tests (ml_py)"
+    entrypoint: bash
+    dir: services/ml_py
+    args: ["-lc", "pip install -r requirements.txt -q && pytest -q"]
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Build-ML-Py'
     args:

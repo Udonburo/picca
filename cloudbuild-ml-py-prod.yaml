@@ -20,10 +20,14 @@ steps:
       - --region=${_REGION}
       - --platform=managed
       - --quiet
-      - --concurrency=4
-      - --cpu=2
-      - --memory=2Gi
-      - --set-env-vars=_MODEL_URI=gs://picca-models/models/dcv/${_TAG_NAME}/model.onnx,_MODEL_SHA256=${_MODEL_SHA256},OMP_NUM_THREADS=2,PYTHONUNBUFFERED=1
+  - --concurrency=4
+  - --cpu=2
+  - --memory=2Gi
+  - --min-instances=1
+  - --timeout=60
+  - --set-env-vars=_MODEL_URI=gs://picca-models/models/dcv/${_TAG_NAME}/model.onnx,_MODEL_SHA256=${_MODEL_SHA256},OMP_NUM_THREADS=2,PYTHONUNBUFFERED=1
+  - --service-account=ml-py-prod-sa@${PROJECT_ID}.iam.gserviceaccount.com
+  - --allow-unauthenticated
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: smoke-test
