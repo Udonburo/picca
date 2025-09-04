@@ -39,11 +39,25 @@ jobs:
 
       # ここまで通ったらML依存を入れる
       - name: Install ml_py deps
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements-dev.txt
+            services/ml_py/requirements.txt
+
+      # dev ツールのみ先に入れて、まずはlintで早期Fail
+      - name: Install dev deps (ruff/pytest etc.)
         run: |
           pip install -r services/ml_py/requirements.txt
+          python -m pip install -U pip
+          pip install -r requirements-dev.txt
 
       # Needed by scripts/export_onnx.py used in tests
       - name: Install torch (CPU)
+      - name: Ruff
+        run: ruff check .
+
+      # ここまで通ったらML依存を入れる
+      - name: Install ml_py deps
         run: |
           pip install torch
 
@@ -67,3 +81,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ENABLE_COMMENTS: "false"
+          pip install -r services/ml_py/requirements.txt
+
+      - name: Pytest
+        run: pytest -q
