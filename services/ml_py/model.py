@@ -11,9 +11,6 @@ import onnxruntime as ort
 
 from .utils.preproc import uniform_sample
 
-_MODEL_URI = os.getenv("_MODEL_URI", "model.onnx")
-_MODEL_SHA256 = os.getenv("_MODEL_SHA256")
-
 
 def _load_model_bytes(uri: str) -> bytes:
     if uri.startswith("gs://"):
@@ -26,10 +23,14 @@ def _load_model_bytes(uri: str) -> bytes:
 
 @lru_cache(maxsize=1)
 def get_session() -> ort.InferenceSession:
-    data = _load_model_bytes(_MODEL_URI)
-    if _MODEL_SHA256:
+    # Read env variables at call-time so tests can monkeypatch them
+    model_uri = os.getenv("_MODEL_URI", "model.onnx")
+    model_sha = os.getenv("_MODEL_SHA256")
+
+    data = _load_model_bytes(model_uri)
+    if model_sha:
         digest = hashlib.sha256(data).hexdigest()
-        if digest != _MODEL_SHA256:
+        if digest != model_sha:
             raise ValueError("model sha256 mismatch")
     return ort.InferenceSession(data, providers=["CPUExecutionProvider"])
 
