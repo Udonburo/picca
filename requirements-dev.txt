@@ -6,5 +6,5 @@ pytest
 ruff
 fastapi
 pydantic
-httpx
+httpx<0.28
 gcsfs

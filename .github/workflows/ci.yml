@@ -5,22 +5,48 @@ on:
     branches: [ main, feat/**, fix/** ]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements-dev.txt
+            services/ml_py/requirements.txt
 
-      - name: Install deps
+      # dev ツールのみ先に入れて、まずはlintで早期Fail
+      - name: Install base dev deps (fast + lean)
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
+          python -m pip install -U pip wheel setuptools
+          pip install ruff pytest "httpx<0.28" onnx
 
-      - name: Ruff & Pytest
+      - name: Ruff
+        run: ruff check .
+
+      # ここまで通ったらML依存を入れる
+      - name: Install ml_py deps
         run: |
-          ruff check .
-          pytest -q
+          pip install -r services/ml_py/requirements.txt
+
+      # Needed by scripts/export_onnx.py used in tests
+      - name: Install torch (CPU)
+        run: |
+          pip install torch
+
+      - name: Pytest
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: pytest -q -ra
