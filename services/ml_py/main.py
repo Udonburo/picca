@@ -1,5 +1,8 @@
+import json
+import logging
+import os
+import time
 from fastapi import FastAPI, Request, HTTPException
-import os, time, json, logging
 
 from schemas import KeypointsInput, ScoreOutput
 from .model import get_session, predict as _predict
