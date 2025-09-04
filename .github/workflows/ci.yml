@@ -41,6 +41,11 @@ jobs:
         run: |
           pip install -r services/ml_py/requirements.txt
 
+      # Needed by scripts/export_onnx.py used in tests
+      - name: Install torch (CPU)
+        run: |
+          pip install torch
+
       - name: Pytest
         env:
           PYTHONPATH: ${{ github.workspace }}
