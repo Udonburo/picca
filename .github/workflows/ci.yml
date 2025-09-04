@@ -84,4 +84,6 @@ jobs:
           pip install -r services/ml_py/requirements.txt
 
       - name: Pytest
-        run: pytest -q
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: pytest -q -ra
