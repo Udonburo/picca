@@ -4,7 +4,7 @@ import os
 import time
 from fastapi import FastAPI, Request, HTTPException
 
-from schemas import KeypointsInput, ScoreOutput
+from .schemas import KeypointsInput, ScoreOutput
 from .model import get_session, predict as _predict
 logging.basicConfig(level=logging.INFO)
 
