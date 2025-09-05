@@ -3,7 +3,13 @@ steps:
     id: "unit tests (ml_py)"
     entrypoint: bash
     dir: services/ml_py
-    args: ["-lc", "pip install -r requirements.txt -q && pytest -q"]
+    args: [
+      "-lc",
+      "python -m pip install -U pip -q && \
+       pip install -r requirements.txt -q && \
+       pip install pytest 'httpx<0.28' -q && \
+       python -m pytest -q"
+    ]
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Build-ML-Py'
     args:
