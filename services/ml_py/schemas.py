@@ -21,3 +21,4 @@ class ScoreOutput(BaseModel):
     power: float
     consistency: float
     analysis: Optional[dict] = None
+
