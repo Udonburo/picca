@@ -88,7 +88,22 @@ jobs:
         run: |
           pip install torch
 
-      - name: Pytest
+      - name: Pytest (JUnit)
+        run: pytest -q -ra --junitxml=pytest.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pytest-report
+          path: pytest.xml
+
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaks
+        uses: zricethezav/gitleaks-action@v2
         env:
-          PYTHONPATH: ${{ github.workspace }}
-        run: pytest -q -ra
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
