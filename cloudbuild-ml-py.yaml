@@ -24,7 +24,6 @@ images:
 options:
   logging: CLOUD_LOGGING_ONLY
 substitutions:
-  _REGION: asia-northeast1
-  _PROJECT: picca-dev-464810
+  _REGION: unset
   _MODEL_URI: "models/dcv/${TAG_NAME}/model.onnx"
 # _MODEL_SHA256 is provided by the build trigger

@@ -1,0 +1,6 @@
+bucket = "YOUR_TFSTATE_BUCKET"
+prefix = "terraform/state"
+
+# Optional:
+# impersonate_service_account = "terraform@YOUR_PROJECT.iam.gserviceaccount.com"
+

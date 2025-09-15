@@ -13,6 +13,10 @@ gcp-sa-key.b64
 # ─ Terraform ─
 .terraform/
 infra/.terraform/
+infra/.terraform.lock.hcl
+infra/terraform.tfstate*
+*.tfstate
+*.tfstate.backup
 
 
 node_modules/
@@ -45,6 +49,11 @@ dist/
 # misc
 .DS_Store
 *.pem
+__pycache__/
+*.pyc
+.DS_Store
+.idea/
+.vscode/
 
 # debug
 npm-debug.log*
@@ -88,4 +97,6 @@ model.onnx
 **/*.tfplan
 **/*.tfvars
 infra/tfplan
-
+infra/backend.hcl
+api_key.txt
+req.json
