@@ -14,7 +14,9 @@ steps:
   args: [
     'run','deploy','picca-api-go-stg',
     '--image','gcr.io/$PROJECT_ID/picca-api-go:$SHORT_SHA',
-    '--region','asia-northeast1',
+    '--region','${_REGION}',
     '--platform','managed',
     '--allow-unauthenticated'
   ]
+substitutions:
+  _REGION: 'unset'

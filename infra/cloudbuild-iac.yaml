@@ -1,35 +1,33 @@
 # cloudbuild-iac.yaml
 
 substitutions:
-  _PROJECT: 'picca-dev-464810'
-  _REGION: 'asia-northeast1'
+  _REGION: 'unset'
 
 steps:
   - id: 'tf-init'
     name: 'hashicorp/terraform:1.8'
     entrypoint: 'terraform'
-    args: ['init', '-input=false']
-    dir: 'infra'
+    args: ['-chdir=infra', 'init', '-backend-config=backend.hcl']
 
   - id: 'tf-plan'
     name: 'hashicorp/terraform:1.8'
     entrypoint: 'terraform'
     args:
+      - '-chdir=infra'
       - 'plan'
       - '-input=false'
       - '-out=tfplan'
-      - "-var=project=$_PROJECT"
-      - "-var=region=$_REGION"
-    dir: 'infra'
+      - "-var=project=${PROJECT_ID}"
+      - "-var=region=${_REGION}"
 
   - id: 'tf-apply'
     name: 'hashicorp/terraform:1.8'
     entrypoint: 'terraform'
     args:
+      - '-chdir=infra'
       - 'apply'
       - '-auto-approve'
       - 'tfplan'
-    dir: 'infra'
 
 options:
   logging: CLOUD_LOGGING_ONLY

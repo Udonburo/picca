@@ -3,6 +3,5 @@ variable "project" {
 }
 
 variable "region" {
-  type    = string
-  default = "asia-northeast1"
+  type = string
 }

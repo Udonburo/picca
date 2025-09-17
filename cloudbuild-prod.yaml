@@ -7,9 +7,8 @@ availableSecrets:
 
 substitutions:
   _SERVICE: 'picca-prod'
-  _REGION: 'asia-northeast1'
+  _REGION: 'unset'
   _TF_ACTION: 'apply'
-  _PROJECT: 'picca-dev-464810'
 
 images:
   - "gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA"
@@ -61,18 +60,18 @@ steps:
     name: 'hashicorp/terraform:1.8'
     entrypoint: 'terraform'
     args:
+      - '-chdir=infra'
       - 'init'
-      - '-input=false'
-    dir: 'infra'
+      - '-backend-config=backend.hcl'
 
   # 5. Terraform apply
   - id: 'tf-apply'
     name: 'hashicorp/terraform:1.8'
     entrypoint: 'terraform'
     args:
+      - '-chdir=infra'
       - 'apply'
-      - '-auto-approve'
-      - '-var=project=${_PROJECT}'
+      - '-var=project=${PROJECT_ID}'
       - '-var=region=${_REGION}'
-    dir: 'infra'
+      - '-auto-approve'
 

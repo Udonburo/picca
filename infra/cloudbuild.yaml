@@ -7,9 +7,8 @@ availableSecrets:
 
 substitutions:
   _TF_ACTION: 'plan'
-  _REGION: 'asia-northeast1'
+  _REGION: 'unset'
   _SERVICE: 'picca-stg'
-  _PROJECT: 'picca-dev-464810'
 
 images:
   - "gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA"
@@ -61,18 +60,17 @@ steps:
   - id: 'tf-init'
     name: 'hashicorp/terraform:1.8'
     entrypoint: 'terraform'
-    args: ['init', '-input=false']
-    dir: 'infra'
+    args: ['-chdir=infra', 'init', '-backend-config=backend.hcl']
 
   # 5. Terraform Plan
   - id: 'tf-plan'
     name: 'hashicorp/terraform:1.8'
     entrypoint: 'terraform'
     args:
+      - '-chdir=infra'
       - 'plan'
       - '-no-color'
       - '-input=false'
       - '-out=plan.tfout'
-      - '-var=project=${_PROJECT}'
+      - '-var=project=${PROJECT_ID}'
       - '-var=region=${_REGION}'
-    dir: 'infra'

@@ -1,58 +1,108 @@
-steps:
-  # Build: ルートをコンテキストに、Dockerfile は明示指定
-  - name: gcr.io/cloud-builders/docker
-    id: build-ml-py
-    args: ['build','-f','services/ml_py/Dockerfile',
-           '-t','${_REGION}-docker.pkg.dev/${PROJECT_ID}/picca-backend/picca-ml-py-prod:latest','.']
-
-  - name: gcr.io/cloud-builders/docker
-    id: push-ml-py
-    args: ['push','${_REGION}-docker.pkg.dev/${PROJECT_ID}/picca-backend/picca-ml-py-prod:latest']
-
-  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    id: deploy-ml-py
-    entrypoint: gcloud
-    args:
-      - run
-      - deploy
-      - picca-ml-py-prod
-      - --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/picca-backend/picca-ml-py-prod:latest
-      - --region=${_REGION}
-      - --platform=managed
-      - --quiet
-  - --concurrency=4
-  - --cpu=2
-  - --memory=2Gi
-  - --min-instances=1
-  - --timeout=60
-  - --set-env-vars=_MODEL_URI=gs://picca-models/models/dcv/${_TAG_NAME}/model.onnx,_MODEL_SHA256=${_MODEL_SHA256},OMP_NUM_THREADS=2,PYTHONUNBUFFERED=1
-  - --service-account=ml-py-prod-sa@${PROJECT_ID}.iam.gserviceaccount.com
-  - --allow-unauthenticated
-
-  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    id: smoke-test
-    entrypoint: bash
-    args:
-      - -c
-      - |
-        set -euo pipefail
-        ML_URL=$(gcloud run services describe picca-ml-py-prod --region ${_REGION} --format='value(status.url)')
-        TOKEN=$(gcloud auth print-identity-token)
-        for i in {1..10}; do
-          if curl -sf -H "Authorization: Bearer $$TOKEN" -H "Content-Type: application/json" \
-            -X POST "$$ML_URL/predict" \
-            -d '{"keypoints":[{"x":0.1,"y":0.2}],"fps":30}' >/dev/null; then
-            echo "smoke OK"; exit 0
-          fi
-          echo "waiting for revision to be ready... ($$i/10)"; sleep 3
-        done
-        echo "smoke-test failed"; exit 1
+# ===== Picca ML PY: prod build & deploy & smoke =====
+# Substitutions: _REGION, _TAG_NAME, _MODEL_BUCKET
+# Example: --substitutions="_REGION=YOUR_REGION,_TAG_NAME=v0.1.1,_MODEL_BUCKET=picca-models"
 
 substitutions:
-  _REGION: asia-northeast1
-  _TAG_NAME: v0.1.1
-  _MODEL_SHA256: ' '
+  _REGION: "unset"
+  _TAG_NAME: "v0.1.1"
+  _MODEL_BUCKET: "picca-models"
 
 options:
   logging: CLOUD_LOGGING_ONLY
-timeout: "3600s"
+
+# 1) Build image from services/ml_py/Dockerfile
+steps:
+  - id: "docker build"
+    name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/picca-backend/picca-ml-py-prod:latest"
+      - "-f"
+      - "services/ml_py/Dockerfile"
+      - "."
+    env:
+      - "DOCKER_BUILDKIT=1"
+
+  - id: "docker push"
+    name: "gcr.io/cloud-builders/docker"
+    args:
+      - "push"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/picca-backend/picca-ml-py-prod:latest"
+
+  # 2) Deploy to Cloud Run (inject MODEL_URI & SHA256, service account, resources)
+  - id: "run deploy"
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        set -euo pipefail
+        IMAGE="${_REGION}-docker.pkg.dev/${PROJECT_ID}/picca-backend/picca-ml-py-prod:latest"
+        MODEL_URI="gs://${_MODEL_BUCKET}/models/dcv/${_TAG_NAME}/model.onnx"
+        SHA="$(gsutil cat gs://${_MODEL_BUCKET}/models/dcv/${_TAG_NAME}/model.onnx.sha256 | tr -d '\n\r')"
+        echo "Deploying: $${IMAGE}"
+        echo "MODEL_URI: $${MODEL_URI}"
+        echo "MODEL_SHA: $${SHA}"
+        gcloud run deploy picca-ml-py-prod \
+          --region="${_REGION}" --platform=managed --quiet \
+          --image="$${IMAGE}" \
+          --concurrency=4 --cpu=2 --memory=2Gi \
+          --min-instances=1 --timeout=60 \
+          --service-account="ml-py-prod-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
+          --set-env-vars="_MODEL_URI=$${MODEL_URI},_MODEL_SHA256=$${SHA},OMP_NUM_THREADS=2,PYTHONUNBUFFERED=1" \
+          --allow-unauthenticated
+
+  - id: "smoke"
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        set -euo pipefail
+
+        URL="$(gcloud run services describe picca-ml-py-prod --region "${_REGION}" --format='value(status.url)')"
+        echo "Service URL: $$URL"
+
+        # 少し待つ（直後の 404/502 回避）
+        sleep 3
+
+        # /healthz は任意
+        curl -fsS "$$URL/healthz" >/dev/null || echo "no /healthz (ok)"
+
+        # /readiness は必須。最大 10 回まで待つ
+        for i in $(seq 1 10); do
+          code="$(curl -s -o /dev/null -w '%{http_code}' "$$URL/readiness" || true)"
+          echo "readiness try #$i -> HTTP $code"
+          if [ "$code" = "200" ]; then
+            break
+          fi
+          if [ "$i" -eq 10 ]; then
+            echo "readiness did not become 200"
+            gcloud run services logs read picca-ml-py-prod --region "${_REGION}" --limit 100 || true
+            exit 1
+          fi
+          sleep 5
+        done
+
+        TOKEN="$(gcloud auth print-identity-token || true)"
+        AUTH_HDR=()
+        [ -n "$$TOKEN" ] && AUTH_HDR=(-H "Authorization: Bearer $$TOKEN")
+
+        body='{"keypoints":[{"x":0.1,"y":0.2},{"x":0.1,"y":0.2},{"x":0.1,"y":0.2}],"fps":30}'
+        for i in $(seq 1 5); do
+          code="$(curl -s -o /dev/null -w '%{http_code}' "${AUTH_HDR[@]}" -H "Content-Type: application/json" \
+            -X POST "$$URL/predict" --data-binary "$body" || true)"
+          echo "predict try #$i -> HTTP $code"
+          if [ "$code" = "200" ]; then
+            echo "Smoke OK"
+            exit 0
+          fi
+          [ "$i" -eq 5 ] && { echo "predict failed with HTTP $code"; curl -i "${AUTH_HDR[@]}" -H "Content-Type: application/json" -X POST "$$URL/predict" --data-binary "$body" || true; exit 1; }
+          sleep 4
+        done
+
+
+
+images:
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/picca-backend/picca-ml-py-prod:latest"

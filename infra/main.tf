@@ -1,9 +1,5 @@
 terraform {
-
-  backend "gcs" {
-    bucket = "terraform-state-picca-dev-464810"
-    prefix = "terraform/state"
-  }
+  backend "gcs" {}
 
   required_providers {
     google = {
@@ -16,26 +12,22 @@ terraform {
       version = "~> 5.0"
     }
   }
-}
 
-locals {
-  project_id = "picca-dev-464810"
-  region     = "asia-northeast1"
+  required_version = ">= 1.5.0"
 }
 
 provider "google" {
-  project = local.project_id
-  region  = local.region
+  project = var.project
+  region  = var.region
 }
 
 provider "google-beta" {
-  project = local.project_id
-  region  = local.region
+  project = var.project
+  region  = var.region
 }
 
-
 resource "google_artifact_registry_repository" "backend" {
-  location      = local.region
+  location      = var.region
   repository_id = "picca-backend"
   description   = "Docker repository for picca backend"
   format        = "DOCKER"

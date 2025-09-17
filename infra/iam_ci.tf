@@ -19,7 +19,7 @@ resource "google_project_iam_member" "cb_run_invoker" {
 # Allow Cloud Build to push images to Artifact Registry
 resource "google_artifact_registry_repository_iam_member" "cb_repo_writer" {
   project    = data.google_project.this.project_id
-  location   = "asia-northeast1"
+  location   = var.region
   repository = "picca-backend"
   role       = "roles/artifactregistry.writer"
   member     = "serviceAccount:${local.cloudbuild_sa}"
