@@ -7,7 +7,6 @@ availableSecrets:
 
 substitutions:
   _TF_ACTION: 'plan'
-  _REGION: 'unset'
   _SERVICE: 'picca-stg'
 
 images:
@@ -18,6 +17,18 @@ options:
   machineType: UNSPECIFIED
 
 steps:
+  # Guard: _REGION はトリガーで必須（未設定/ "unset" なら即失敗）
+  - id: 'guard-region'
+    name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - -lc
+      - |
+        set -euo pipefail
+        if [[ -z "${_REGION:-}" || "${_REGION}" == "unset" ]]; then
+          echo "ERROR: _REGION must be set in the Cloud Build trigger (e.g., asia-northeast1)." 1>&2
+          exit 1
+        fi
   # 1. unit tests
   - id: 'install-and-test'
     name: 'node:20'
