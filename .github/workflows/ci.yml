@@ -63,5 +63,3 @@ jobs:
           fetch-depth: 0
       - name: Gitleaks
         uses: zricethezav/gitleaks-action@v2
-        # env:
-        #   GITLEAKS_LICENSE:
