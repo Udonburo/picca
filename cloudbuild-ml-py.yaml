@@ -1,4 +1,15 @@
 steps:
+  - id: 'guard-region'
+    name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - -lc
+      - |
+        set -euo pipefail
+        if [[ -z "${_REGION:-}" || "${_REGION}" == "unset" ]]; then
+          echo "ERROR: _REGION must be set in the Cloud Build trigger (e.g., asia-northeast1)." 1>&2
+          exit 1
+        fi
   - name: python:3.11
     id: "unit tests (ml_py)"
     entrypoint: bash
@@ -24,6 +35,5 @@ images:
 options:
   logging: CLOUD_LOGGING_ONLY
 substitutions:
-  _REGION: unset
   _MODEL_URI: "models/dcv/${TAG_NAME}/model.onnx"
-# _MODEL_SHA256 is provided by the build trigger
+  # _MODEL_SHA256 is provided by the build trigger
