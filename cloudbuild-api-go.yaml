@@ -8,7 +8,7 @@ steps:
     entrypoint: 'bash'
     args:
       - -lc
-      - |-
+      - |
         set -euo pipefail
         REGION="${_REGION}"
         if [[ -z "${REGION}" || "${REGION}" == "unset" ]]; then
