@@ -5,6 +5,7 @@
 substitutions:
   _TAG_NAME: "v0.1.1"
   _MODEL_BUCKET: "picca-models"
+  # _REGION: 'unset' ← この行は不要であれば削除してOKです
 
 options:
   logging: CLOUD_LOGGING_ONLY
@@ -16,7 +17,7 @@ steps:
     entrypoint: 'bash'
     args:
       - -lc
-      - |
+      - |-
         set -euo pipefail
         region="${_REGION}"
         if [[ -z "${region}" || "${region}" == "unset" ]]; then
