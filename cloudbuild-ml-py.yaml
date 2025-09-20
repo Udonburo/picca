@@ -1,12 +1,17 @@
+substitutions:
+  _MODEL_URI: "models/dcv/${TAG_NAME}/model.onnx"
+  # _MODEL_SHA256 is provided by the build trigger
+
 steps:
   - id: 'guard-region'
     name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
     args:
       - -lc
-      - |
+      - |-
         set -euo pipefail
-        if [[ -z "${_REGION:-}" || "${_REGION}" == "unset" ]]; then
+        REGION="${_REGION}"
+        if [[ -z "${REGION}" || "${REGION}" == "unset" ]]; then
           echo "ERROR: _REGION must be set in the Cloud Build trigger (e.g., asia-northeast1)." 1>&2
           exit 1
         fi
@@ -34,6 +39,3 @@ images:
   - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/picca-backend/picca-ml-py-stg:latest'
 options:
   logging: CLOUD_LOGGING_ONLY
-substitutions:
-  _MODEL_URI: "models/dcv/${TAG_NAME}/model.onnx"
-  # _MODEL_SHA256 is provided by the build trigger

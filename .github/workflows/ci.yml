@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -63,3 +64,5 @@ jobs:
           fetch-depth: 0
       - name: Gitleaks
         uses: zricethezav/gitleaks-action@v2
+        # env:
+        #   GITLEAKS_LICENSE:
