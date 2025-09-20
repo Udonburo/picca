@@ -89,12 +89,12 @@ steps:
       - -lc
       - |
         set -euo pipefail
-        bucket="${_TF_BACKEND_BUCKET:-}"
-        prefix="${_TF_BACKEND_PREFIX:-terraform/state}"
-        impersonate_sa="${_TF_BACKEND_IMPERSONATE_SA:-}"
+        bucket="${_TF_BACKEND_BUCKET:-${TF_BACKEND_BUCKET:-}}"
+        prefix="${_TF_BACKEND_PREFIX:-${TF_BACKEND_PREFIX:-terraform/state}}"
+        impersonate_sa="${_TF_BACKEND_IMPERSONATE_SA:-${TF_BACKEND_IMPERSONATE_SA:-}}"
 
         if [[ -z "${bucket}" ]]; then
-          echo "ERROR: _TF_BACKEND_BUCKET must be set in the trigger substitutions." 1>&2
+          echo "ERROR: Provide _TF_BACKEND_BUCKET (or legacy TF_BACKEND_BUCKET) in the trigger substitutions." 1>&2
           exit 1
         fi
 
