@@ -1,4 +1,4 @@
-﻿# ===== Picca ML PY: prod build & deploy & smoke =====
+# ===== Picca ML PY: prod build & deploy & smoke =====
 # Substitutions: _REGION, _TAG_NAME, _MODEL_BUCKET
 # Example: --substitutions="_REGION=YOUR_REGION,_TAG_NAME=v0.1.1,_MODEL_BUCKET=picca-models"
 
