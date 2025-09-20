@@ -64,5 +64,6 @@ jobs:
           fetch-depth: 0
       - name: Gitleaks
         uses: zricethezav/gitleaks-action@v2
-        # env:
-        #   GITLEAKS_LICENSE:
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: "false"
