@@ -24,8 +24,8 @@ steps:
       - -lc
       - |
         set -euo pipefail
-        REGION="${_REGION}"
-        if [[ -z "${REGION}" || "${REGION}" == "unset" ]]; then
+        region="${_REGION}"
+        if [[ -z "${region}" || "${region}" == "unset" ]]; then
           echo "ERROR: _REGION must be set in the Cloud Build trigger (e.g., asia-northeast1)." 1>&2
           exit 1
         fi
@@ -57,16 +57,25 @@ steps:
     name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
     args:
-      - '-c'
+      - -lc
       - |
         set -euo pipefail
-        REGION="${_REGION}"
-        SERVICE="${_SERVICE}"
-        IMAGE="gcr.io/${PROJECT_ID}/${SERVICE}:${SHORT_SHA}"
+        region="${_REGION}"
+        service="${_SERVICE}"
+        service_override="$(printenv SERVICE || true)"
+        if [ -n "${service_override}" ]; then
+          service="${service_override}"
+        fi
+        image_override="$(printenv IMAGE || true)"
+        if [ -n "${image_override}" ]; then
+          image="${image_override}"
+        else
+          image="gcr.io/${PROJECT_ID}/${service}:${SHORT_SHA}"
+        fi
 
-        gcloud run deploy "${SERVICE}" \
-          --image "${IMAGE}" \
-          --region "${REGION}" \
+        gcloud run deploy "${service}" \
+          --image "${image}" \
+          --region "${region}" \
           --platform managed \
           --no-allow-unauthenticated \
           --set-secrets=DB_PASSWORD=DB_PASSWORD:latest \

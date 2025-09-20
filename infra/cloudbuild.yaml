@@ -23,8 +23,8 @@ steps:
       - -lc
       - |
         set -euo pipefail
-        REGION="${_REGION}"
-        if [[ -z "${REGION}" || "${REGION}" == "unset" ]]; then
+        region="${_REGION}"
+        if [[ -z "${region}" || "${region}" == "unset" ]]; then
           echo "ERROR: _REGION must be set in the Cloud Build trigger (e.g., asia-northeast1)." 1>&2
           exit 1
         fi
@@ -52,19 +52,31 @@ steps:
   # 3. Cloud Run へデプロイ
   - id: 'deploy-to-cloud-run'
     name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
     args:
-      - 'run'
-      - 'deploy'
-      - '${_SERVICE}'
-      - '--image'
-      - 'gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA'
-      - '--region'
-      - '${_REGION}'
-      - '--platform'
-      - 'managed'
-      - '--set-secrets=DB_PASSWORD=DB_PASSWORD:latest,API_KEY=API_KEY:latest'
-      - '--allow-unauthenticated'
-      - '--quiet'
+      - -lc
+      - |
+        set -euo pipefail
+        region="${_REGION}"
+        service="${_SERVICE}"
+        service_override="$(printenv SERVICE || true)"
+        if [ -n "${service_override}" ]; then
+          service="${service_override}"
+        fi
+        image_override="$(printenv IMAGE || true)"
+        if [ -n "${image_override}" ]; then
+          image="${image_override}"
+        else
+          image="gcr.io/$PROJECT_ID/${service}:$SHORT_SHA"
+        fi
+
+        gcloud run deploy "${service}" \
+          --image "${image}" \
+          --region "${region}" \
+          --platform managed \
+          --set-secrets=DB_PASSWORD=DB_PASSWORD:latest,API_KEY=API_KEY:latest \
+          --allow-unauthenticated \
+          --quiet
 
   # 4. Terraform 初期化
   - id: 'tf-init'
