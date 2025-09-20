@@ -24,8 +24,8 @@ steps:
       - -lc
       - |
         set -euo pipefail
-        REGION="${_REGION}"
-        if [[ -z "${REGION}" || "${REGION}" == "unset" ]]; then
+        region="${_REGION}"
+        if [[ -z "${region}" || "${region}" == "unset" ]]; then
           echo "ERROR: _REGION must be set in the Cloud Build trigger (e.g., asia-northeast1)." 1>&2
           exit 1
         fi
@@ -57,22 +57,55 @@ steps:
     name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
     args:
-      - '-c'
+      - -lc
       - |
         set -euo pipefail
-        REGION="${_REGION}"
-        SERVICE="${_SERVICE}"
-        IMAGE="gcr.io/${PROJECT_ID}/${SERVICE}:${SHORT_SHA}"
+        region="${_REGION}"
+        service="${_SERVICE}"
+        service_override="$(printenv SERVICE || true)"
+        if [ -n "${service_override}" ]; then
+          service="${service_override}"
+        fi
+        image_override="$(printenv IMAGE || true)"
+        if [ -n "${image_override}" ]; then
+          image="${image_override}"
+        else
+          image="gcr.io/${PROJECT_ID}/${service}:${SHORT_SHA}"
+        fi
 
-        gcloud run deploy "${SERVICE}" \
-          --image "${IMAGE}" \
-          --region "${REGION}" \
+        gcloud run deploy "${service}" \
+          --image "${image}" \
+          --region "${region}" \
           --platform managed \
           --no-allow-unauthenticated \
           --set-secrets=DB_PASSWORD=DB_PASSWORD:latest \
           --quiet
 
   # 4. Terraform 初期化
+  - id: 'write-backend-config'
+    name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - -lc
+      - |
+        set -euo pipefail
+        bucket="${_TF_BACKEND_BUCKET:-${TF_BACKEND_BUCKET:-}}"
+        prefix="${_TF_BACKEND_PREFIX:-${TF_BACKEND_PREFIX:-terraform/state}}"
+        impersonate_sa="${_TF_BACKEND_IMPERSONATE_SA:-${TF_BACKEND_IMPERSONATE_SA:-}}"
+
+        if [[ -z "${bucket}" ]]; then
+          echo "ERROR: Provide _TF_BACKEND_BUCKET (or legacy TF_BACKEND_BUCKET) in the trigger substitutions." 1>&2
+          exit 1
+        fi
+
+        {
+          printf 'bucket = "%s"\n' "${bucket}"
+          printf 'prefix = "%s"\n' "${prefix}"
+          if [[ -n "${impersonate_sa}" ]]; then
+            printf 'impersonate_service_account = "%s"\n' "${impersonate_sa}"
+          fi
+        } > infra/backend.hcl
+
   - id: 'tf-init'
     name: 'hashicorp/terraform:1.8'
     entrypoint: 'terraform'
