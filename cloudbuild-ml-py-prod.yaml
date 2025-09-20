@@ -1,10 +1,11 @@
-# ===== Picca ML PY: prod build & deploy & smoke =====
+﻿# ===== Picca ML PY: prod build & deploy & smoke =====
 # Substitutions: _REGION, _TAG_NAME, _MODEL_BUCKET
 # Example: --substitutions="_REGION=YOUR_REGION,_TAG_NAME=v0.1.1,_MODEL_BUCKET=picca-models"
 
 substitutions:
   _TAG_NAME: "v0.1.1"
   _MODEL_BUCKET: "picca-models"
+  # _REGION: 'unset' ← この行は不要であれば削除してOKです
 
 options:
   logging: CLOUD_LOGGING_ONLY
@@ -16,9 +17,10 @@ steps:
     entrypoint: 'bash'
     args:
       - -lc
-      - |
+      - |-
         set -euo pipefail
-        if [[ -z "${_REGION:-}" || "${_REGION}" == "unset" ]]; then
+        REGION="${_REGION}"
+        if [[ -z "${REGION}" || "${REGION}" == "unset" ]]; then
           echo "ERROR: _REGION must be set in the Cloud Build trigger (e.g., asia-northeast1)." 1>&2
           exit 1
         fi
@@ -112,8 +114,6 @@ steps:
           [ "$i" -eq 5 ] && { echo "predict failed with HTTP $code"; curl -i "${AUTH_HDR[@]}" -H "Content-Type: application/json" -X POST "$$URL/predict" --data-binary "$body" || true; exit 1; }
           sleep 4
         done
-
-
 
 images:
   - "${_REGION}-docker.pkg.dev/$PROJECT_ID/picca-backend/picca-ml-py-prod:latest"

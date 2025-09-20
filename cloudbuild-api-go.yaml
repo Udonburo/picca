@@ -2,14 +2,16 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 steps:
+  # === PRE-CHECKS ===
   - id: 'guard-region'
     name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
     args:
       - -lc
-      - |
+      - |-
         set -euo pipefail
-        if [[ -z "${_REGION:-}" || "${_REGION}" == "unset" ]]; then
+        REGION="${_REGION}"
+        if [[ -z "${REGION}" || "${REGION}" == "unset" ]]; then
           echo "ERROR: _REGION must be set in the Cloud Build trigger (e.g., asia-northeast1)." 1>&2
           exit 1
         fi
