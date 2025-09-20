@@ -6,7 +6,6 @@ availableSecrets:
 substitutions:
   _TF_ACTION: 'plan'
   _SERVICE: 'picca-stg'
-  # _REGION: 'unset' ← この行は不要であれば削除してOKです
 
 images:
   - "gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA"
@@ -22,7 +21,7 @@ steps:
     entrypoint: 'bash'
     args:
       - -lc
-      - |-
+      - |
         set -euo pipefail
         REGION="${_REGION}"
         if [[ -z "${REGION}" || "${REGION}" == "unset" ]]; then

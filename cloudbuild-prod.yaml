@@ -7,7 +7,6 @@ availableSecrets:
 
 substitutions:
   _SERVICE: 'picca-prod'
-  _REGION: 'unset'
   _TF_ACTION: 'apply'
 
 images:
@@ -18,6 +17,19 @@ options:
   machineType: UNSPECIFIED
 
 steps:
+  - id: 'guard-region'
+    name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - -lc
+      - |
+        set -euo pipefail
+        REGION="${_REGION}"
+        if [[ -z "${REGION}" || "${REGION}" == "unset" ]]; then
+          echo "ERROR: _REGION must be set in the Cloud Build trigger (e.g., asia-northeast1)." 1>&2
+          exit 1
+        fi
+
   # 1. ユニットテスト
   - id: 'run-unit-tests'
     name: 'node:20'
@@ -47,9 +59,14 @@ steps:
     args:
       - '-c'
       - |
-        gcloud run deploy $_SERVICE \
-          --image gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA \
-          --region $_REGION \
+        set -euo pipefail
+        REGION="${_REGION}"
+        SERVICE="${_SERVICE}"
+        IMAGE="gcr.io/${PROJECT_ID}/${SERVICE}:${SHORT_SHA}"
+
+        gcloud run deploy "${SERVICE}" \
+          --image "${IMAGE}" \
+          --region "${REGION}" \
           --platform managed \
           --no-allow-unauthenticated \
           --set-secrets=DB_PASSWORD=DB_PASSWORD:latest \

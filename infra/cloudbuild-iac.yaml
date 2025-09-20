@@ -1,9 +1,19 @@
 # cloudbuild-iac.yaml
 
-substitutions:
-  _REGION: 'unset'
-
 steps:
+  - id: 'guard-region'
+    name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - -lc
+      - |
+        set -euo pipefail
+        REGION="${_REGION}"
+        if [[ -z "${REGION}" || "${REGION}" == "unset" ]]; then
+          echo "ERROR: _REGION must be set in the Cloud Build trigger (e.g., asia-northeast1)." 1>&2
+          exit 1
+        fi
+
   - id: 'tf-init'
     name: 'hashicorp/terraform:1.8'
     entrypoint: 'terraform'
