@@ -18,8 +18,8 @@ steps:
       - -lc
       - |
         set -euo pipefail
-        REGION="${_REGION}"
-        if [[ -z "${REGION}" || "${REGION}" == "unset" ]]; then
+        region="${_REGION}"
+        if [[ -z "${region}" || "${region}" == "unset" ]]; then
           echo "ERROR: _REGION must be set in the Cloud Build trigger (e.g., asia-northeast1)." 1>&2
           exit 1
         fi
@@ -47,22 +47,22 @@ steps:
     name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     entrypoint: "bash"
     args:
-      - "-c"
+      - "-lc"
       - |
         set -euo pipefail
-        IMAGE="${_REGION}-docker.pkg.dev/${PROJECT_ID}/picca-backend/picca-ml-py-prod:latest"
-        MODEL_URI="gs://${_MODEL_BUCKET}/models/dcv/${_TAG_NAME}/model.onnx"
-        SHA="$(gsutil cat gs://${_MODEL_BUCKET}/models/dcv/${_TAG_NAME}/model.onnx.sha256 | tr -d '\n\r')"
-        echo "Deploying: $${IMAGE}"
-        echo "MODEL_URI: $${MODEL_URI}"
-        echo "MODEL_SHA: $${SHA}"
+        image="${_REGION}-docker.pkg.dev/${PROJECT_ID}/picca-backend/picca-ml-py-prod:latest"
+        model_uri="gs://${_MODEL_BUCKET}/models/dcv/${_TAG_NAME}/model.onnx"
+        sha="$(gsutil cat gs://${_MODEL_BUCKET}/models/dcv/${_TAG_NAME}/model.onnx.sha256 | tr -d '\n\r')"
+        echo "Deploying: ${image}"
+        echo "MODEL_URI: ${model_uri}"
+        echo "MODEL_SHA: ${sha}"
         gcloud run deploy picca-ml-py-prod \
           --region="${_REGION}" --platform=managed --quiet \
-          --image="$${IMAGE}" \
+          --image="${image}" \
           --concurrency=4 --cpu=2 --memory=2Gi \
           --min-instances=1 --timeout=60 \
           --service-account="ml-py-prod-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
-          --set-env-vars="_MODEL_URI=$${MODEL_URI},_MODEL_SHA256=$${SHA},OMP_NUM_THREADS=2,PYTHONUNBUFFERED=1" \
+          --set-env-vars="_MODEL_URI=${model_uri},_MODEL_SHA256=${sha},OMP_NUM_THREADS=2,PYTHONUNBUFFERED=1" \
           --allow-unauthenticated
 
   - id: "smoke"

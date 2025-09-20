@@ -8,11 +8,35 @@ steps:
       - -lc
       - |
         set -euo pipefail
-        REGION="${_REGION}"
-        if [[ -z "${REGION}" || "${REGION}" == "unset" ]]; then
+        region="${_REGION}"
+        if [[ -z "${region}" || "${region}" == "unset" ]]; then
           echo "ERROR: _REGION must be set in the Cloud Build trigger (e.g., asia-northeast1)." 1>&2
           exit 1
         fi
+
+  - id: 'write-backend-config'
+    name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - -lc
+      - |
+        set -euo pipefail
+        bucket="${_TF_BACKEND_BUCKET:-}"
+        prefix="${_TF_BACKEND_PREFIX:-terraform/state}"
+        impersonate_sa="${_TF_BACKEND_IMPERSONATE_SA:-}"
+
+        if [[ -z "${bucket}" ]]; then
+          echo "ERROR: _TF_BACKEND_BUCKET must be set in the trigger substitutions." 1>&2
+          exit 1
+        fi
+
+        {
+          printf 'bucket = "%s"\n' "${bucket}"
+          printf 'prefix = "%s"\n' "${prefix}"
+          if [[ -n "${impersonate_sa}" ]]; then
+            printf 'impersonate_service_account = "%s"\n' "${impersonate_sa}"
+          fi
+        } > infra/backend.hcl
 
   - id: 'tf-init'
     name: 'hashicorp/terraform:1.8'
