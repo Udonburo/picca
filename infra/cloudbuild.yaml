@@ -96,10 +96,8 @@ steps:
           exit 1
         fi
         PREFIX="${_TFSTATE_PREFIX:-infra/state}"
-        cat > infra/backend.hcl <<EOF
-        bucket = "${BUCKET}"
-        prefix = "${PREFIX}"
-        EOF
+        # Cloud Build が $BUCKET/$PREFIX を置換しないよう $$ でエスケープ
+        printf 'bucket = "%s"\nprefix = "%s"\n' "$$BUCKET" "$$PREFIX" > infra/backend.hcl
         echo "[ok] wrote infra/backend.hcl -> bucket=${BUCKET}, prefix=${PREFIX}"
 
   # 4. Terraform 初期化
