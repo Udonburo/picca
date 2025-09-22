@@ -6,6 +6,9 @@ availableSecrets:
 substitutions:
   _TF_ACTION: 'plan'
   _SERVICE: 'picca-stg'
+  # ※ _REGION はトリガー（Substitutions）で必ず指定すること（例: asia-northeast1）
+  # ※ _TF_BACKEND_BUCKET もトリガーで指定（例: picca-tfstate-${PROJECT_ID}）
+  #    _TFSTATE_PREFIX は任意（未指定時は infra/state を使用）
 
 images:
   - "gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA"
@@ -15,7 +18,7 @@ options:
   machineType: UNSPECIFIED
 
 steps:
-  # Guard: _REGION はトリガーで必須（未設定/ "unset" なら即失敗）
+  # 0. Guard: _REGION はトリガー必須
   - id: 'guard-region'
     name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
@@ -28,6 +31,7 @@ steps:
           echo "ERROR: _REGION must be set in the Cloud Build trigger (e.g., asia-northeast1)." 1>&2
           exit 1
         fi
+
   # 1. unit tests
   - id: 'install-and-test'
     name: 'node:20'
@@ -35,7 +39,7 @@ steps:
     secretEnv:
       - 'DB_PASSWORD'
     args:
-      - '-c'
+      - -c
       - |
         echo "Installing dependencies and running tests..."
         npm ci && npm test -- --ci
@@ -77,6 +81,26 @@ steps:
           --set-secrets=DB_PASSWORD=DB_PASSWORD:latest,API_KEY=API_KEY:latest \
           --allow-unauthenticated \
           --quiet
+
+  # 3.5 Terraform 用 backend.hcl を生成（ここで _TF_BACKEND_BUCKET をチェック）
+  - id: 'write-backend-config'
+    name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - -lc
+      - |
+        set -euo pipefail
+        BUCKET="${_TF_BACKEND_BUCKET}"
+        if [[ -z "${BUCKET}" ]]; then
+          echo "ERROR: Provide _TF_BACKEND_BUCKET in trigger substitutions." 1>&2
+          exit 1
+        fi
+        PREFIX="${_TFSTATE_PREFIX:-infra/state}"
+        cat > infra/backend.hcl <<EOF
+        bucket = "${BUCKET}"
+        prefix = "${PREFIX}"
+        EOF
+        echo "[ok] wrote infra/backend.hcl -> bucket=${BUCKET}, prefix=${PREFIX}"
 
   # 4. Terraform 初期化
   - id: 'write-backend-config'
