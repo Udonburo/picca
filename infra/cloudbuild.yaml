@@ -6,9 +6,9 @@ availableSecrets:
 substitutions:
   _TF_ACTION: 'plan'
   _SERVICE: 'picca-stg'
-  # ※ _REGION はトリガー（Substitutions）で必ず指定すること（例: asia-northeast1）
+  # ※ _REGION はトリガー（Substitutions）で必ず指定（例: asia-northeast1）
   # ※ _TF_BACKEND_BUCKET もトリガーで指定（例: picca-tfstate-${PROJECT_ID}）
-  #    _TFSTATE_PREFIX は任意（未指定時は infra/state を使用）
+  #    _TFSTATE_PREFIX は任意（未指定時は infra/state）
 
 images:
   - "gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA"
@@ -82,49 +82,28 @@ steps:
           --allow-unauthenticated \
           --quiet
 
-  # 3.5 Terraform 用 backend.hcl を生成（ここで _TF_BACKEND_BUCKET をチェック）
-  - id: 'write-backend-config'
+  # 3.5 Terraform 用 backend.hcl を生成（_TF_BACKEND_BUCKET 必須／レガシーも許容）
+  - id: 'gen-backend-hcl'
     name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
     args:
       - -lc
       - |
         set -euo pipefail
-        BUCKET="${_TF_BACKEND_BUCKET}"
+        # Primary: _TF_BACKEND_BUCKET（ユーザー定義）
+        # Fallback: TF_BACKEND_BUCKET（レガシー環境変数）
+        BUCKET="${_TF_BACKEND_BUCKET:-${TF_BACKEND_BUCKET:-}}"
         if [[ -z "${BUCKET}" ]]; then
-          echo "ERROR: Provide _TF_BACKEND_BUCKET in trigger substitutions." 1>&2
+          echo "ERROR: Provide _TF_BACKEND_BUCKET in trigger substitutions, or export TF_BACKEND_BUCKET in the environment." 1>&2
           exit 1
         fi
-        PREFIX="${_TFSTATE_PREFIX:-infra/state}"
-        # Cloud Build が $BUCKET/$PREFIX を置換しないよう $$ でエスケープ
+        # プレフィクスは _TFSTATE_PREFIX を正とし、無ければ TFSTATE_PREFIX、デフォルト infra/state
+        PREFIX="${_TFSTATE_PREFIX:-${TFSTATE_PREFIX:-infra/state}}"
+        # Cloud Build の置換を避けるため $$ でエスケープ（実行時に $ に戻る）
         printf 'bucket = "%s"\nprefix = "%s"\n' "$$BUCKET" "$$PREFIX" > infra/backend.hcl
         echo "[ok] wrote infra/backend.hcl -> bucket=${BUCKET}, prefix=${PREFIX}"
 
   # 4. Terraform 初期化
-  - id: 'write-backend-config'
-    name: 'gcr.io/cloud-builders/gcloud'
-    entrypoint: 'bash'
-    args:
-      - -lc
-      - |
-        set -euo pipefail
-        bucket="${_TF_BACKEND_BUCKET:-${TF_BACKEND_BUCKET:-}}"
-        prefix="${_TF_BACKEND_PREFIX:-${TF_BACKEND_PREFIX:-terraform/state}}"
-        impersonate_sa="${_TF_BACKEND_IMPERSONATE_SA:-${TF_BACKEND_IMPERSONATE_SA:-}}"
-
-        if [[ -z "${bucket}" ]]; then
-          echo "ERROR: Provide _TF_BACKEND_BUCKET (or legacy TF_BACKEND_BUCKET) in the trigger substitutions." 1>&2
-          exit 1
-        fi
-
-        {
-          printf 'bucket = "%s"\n' "${bucket}"
-          printf 'prefix = "%s"\n' "${prefix}"
-          if [[ -n "${impersonate_sa}" ]]; then
-            printf 'impersonate_service_account = "%s"\n' "${impersonate_sa}"
-          fi
-        } > infra/backend.hcl
-
   - id: 'tf-init'
     name: 'hashicorp/terraform:1.8'
     entrypoint: 'terraform'
