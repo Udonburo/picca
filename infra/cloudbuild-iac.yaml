@@ -1,6 +1,5 @@
-# cloudbuild-iac.yaml
-
 steps:
+  # 0) _REGION ガード
   - id: 'guard-region'
     name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
@@ -8,13 +7,14 @@ steps:
       - -lc
       - |
         set -euo pipefail
-        region="${_REGION}"
+        region="${_REGION:-}"
         if [[ -z "${region}" || "${region}" == "unset" ]]; then
           echo "ERROR: _REGION must be set in the Cloud Build trigger (e.g., asia-northeast1)." 1>&2
           exit 1
         fi
 
-  - id: 'write-backend-config'
+  # 1) backend.hcl 生成（_TF_BACKEND_BUCKET 必須、$$ で置換回避）
+  - id: 'gen-backend-hcl'
     name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
     args:
@@ -22,27 +22,29 @@ steps:
       - |
         set -euo pipefail
         bucket="${_TF_BACKEND_BUCKET:-${TF_BACKEND_BUCKET:-}}"
-        prefix="${_TF_BACKEND_PREFIX:-${TF_BACKEND_PREFIX:-terraform/state}}"
+        prefix="${_TFSTATE_PREFIX:-${TFSTATE_PREFIX:-terraform/state}}"
         impersonate_sa="${_TF_BACKEND_IMPERSONATE_SA:-${TF_BACKEND_IMPERSONATE_SA:-}}"
 
-        if [[ -z "${bucket}" ]]; then
+        if [[ -z "$$bucket" ]]; then
           echo "ERROR: Provide _TF_BACKEND_BUCKET (or legacy TF_BACKEND_BUCKET) in the trigger substitutions." 1>&2
           exit 1
         fi
 
         {
-          printf 'bucket = "%s"\n' "${bucket}"
-          printf 'prefix = "%s"\n' "${prefix}"
-          if [[ -n "${impersonate_sa}" ]]; then
-            printf 'impersonate_service_account = "%s"\n' "${impersonate_sa}"
+          printf 'bucket = "%s"\n' "$$bucket"
+          printf 'prefix = "%s"\n' "$$prefix"
+          if [[ -n "$$impersonate_sa" ]]; then
+            printf 'impersonate_service_account = "%s"\n' "$$impersonate_sa"
           fi
         } > infra/backend.hcl
 
+  # 2) terraform init
   - id: 'tf-init'
     name: 'hashicorp/terraform:1.8'
     entrypoint: 'terraform'
     args: ['-chdir=infra', 'init', '-backend-config=backend.hcl']
 
+  # 3) terraform plan
   - id: 'tf-plan'
     name: 'hashicorp/terraform:1.8'
     entrypoint: 'terraform'
@@ -54,14 +56,11 @@ steps:
       - "-var=project=${PROJECT_ID}"
       - "-var=region=${_REGION}"
 
+  # 4) terraform apply
   - id: 'tf-apply'
     name: 'hashicorp/terraform:1.8'
     entrypoint: 'terraform'
-    args:
-      - '-chdir=infra'
-      - 'apply'
-      - '-auto-approve'
-      - 'tfplan'
+    args: ['-chdir=infra', 'apply', '-auto-approve', 'tfplan']
 
 options:
   logging: CLOUD_LOGGING_ONLY

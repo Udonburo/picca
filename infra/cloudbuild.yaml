@@ -4,11 +4,8 @@ availableSecrets:
       env: "DB_PASSWORD"
 
 substitutions:
-  _TF_ACTION: 'plan'
-  _SERVICE: 'picca-stg'
-  # ※ _REGION はトリガー（Substitutions）で必ず指定（例: asia-northeast1）
-  # ※ _TF_BACKEND_BUCKET もトリガーで指定（例: picca-tfstate-${PROJECT_ID}）
-  #    _TFSTATE_PREFIX は任意（未指定時は infra/state）
+  _TF_ACTION: 'plan'       # plan|apply|skip（skip なら IaC を飛ばす）
+  _SERVICE: 'picca-stg'    # デフォルトサービス名（SERVICE/IMAGE env で上書き可）
 
 images:
   - "gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA"
@@ -18,7 +15,7 @@ options:
   machineType: UNSPECIFIED
 
 steps:
-  # 0. Guard: _REGION はトリガー必須
+  # 0) _REGION は必須
   - id: 'guard-region'
     name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
@@ -26,26 +23,26 @@ steps:
       - -lc
       - |
         set -euo pipefail
-        region="${_REGION}"
+        region="${_REGION:-}"
         if [[ -z "${region}" || "${region}" == "unset" ]]; then
           echo "ERROR: _REGION must be set in the Cloud Build trigger (e.g., asia-northeast1)." 1>&2
           exit 1
         fi
 
-  # 1. unit tests
+  # 1) ユニットテスト
   - id: 'install-and-test'
     name: 'node:20'
     entrypoint: 'bash'
-    secretEnv:
-      - 'DB_PASSWORD'
+    secretEnv: ['DB_PASSWORD']
     args:
       - -c
       - |
-        echo "Installing dependencies and running tests..."
-        npm ci && npm test -- --ci
+        set -euo pipefail
+        npm ci
+        npm test -- --ci
 
-  # 2. Docker イメージをビルド＆プッシュ
-  - id: 'build-and-push-image'
+  # 2) Docker build & push
+  - id: 'build-image'
     name: 'gcr.io/cloud-builders/docker'
     args: ['build', '-t', 'gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA', '.']
 
@@ -53,7 +50,7 @@ steps:
     name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA']
 
-  # 3. Cloud Run へデプロイ
+  # 3) Cloud Run deploy
   - id: 'deploy-to-cloud-run'
     name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
@@ -63,16 +60,8 @@ steps:
         set -euo pipefail
         region="${_REGION}"
         service="${_SERVICE}"
-        service_override="$(printenv SERVICE || true)"
-        if [ -n "${service_override}" ]; then
-          service="${service_override}"
-        fi
-        image_override="$(printenv IMAGE || true)"
-        if [ -n "${image_override}" ]; then
-          image="${image_override}"
-        else
-          image="gcr.io/$PROJECT_ID/${service}:$SHORT_SHA"
-        fi
+        if [[ -n "${SERVICE:-}" ]]; then service="${SERVICE}"; fi
+        if [[ -n "${IMAGE:-}" ]];  then image="${IMAGE}"; else image="gcr.io/$PROJECT_ID/${service}:$SHORT_SHA"; fi
 
         gcloud run deploy "${service}" \
           --image "${image}" \
@@ -82,7 +71,7 @@ steps:
           --allow-unauthenticated \
           --quiet
 
-  # 3.5 Terraform 用 backend.hcl を生成（_TF_BACKEND_BUCKET 必須／レガシーも許容）
+  # 3.5) Terraform backend.hcl 生成（Cloud Build 置換を回避するため $$ を使用）
   - id: 'gen-backend-hcl'
     name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
@@ -90,34 +79,45 @@ steps:
       - -lc
       - |
         set -euo pipefail
-        # Primary: _TF_BACKEND_BUCKET（ユーザー定義）
-        # Fallback: TF_BACKEND_BUCKET（レガシー環境変数）
         BUCKET="${_TF_BACKEND_BUCKET:-${TF_BACKEND_BUCKET:-}}"
-        if [[ -z "${BUCKET}" ]]; then
-          echo "ERROR: Provide _TF_BACKEND_BUCKET in trigger substitutions, or export TF_BACKEND_BUCKET in the environment." 1>&2
+        if [[ -z "$$BUCKET" ]]; then
+          echo "ERROR: Provide _TF_BACKEND_BUCKET in trigger substitutions, or export TF_BACKEND_BUCKET." 1>&2
           exit 1
         fi
-        # プレフィクスは _TFSTATE_PREFIX を正とし、無ければ TFSTATE_PREFIX、デフォルト infra/state
         PREFIX="${_TFSTATE_PREFIX:-${TFSTATE_PREFIX:-infra/state}}"
-        # Cloud Build の置換を避けるため $$ でエスケープ（実行時に $ に戻る）
         printf 'bucket = "%s"\nprefix = "%s"\n' "$$BUCKET" "$$PREFIX" > infra/backend.hcl
-        echo "[ok] wrote infra/backend.hcl -> bucket=${BUCKET}, prefix=${PREFIX}"
+        echo "[ok] wrote infra/backend.hcl -> bucket=$$BUCKET, prefix=$$PREFIX"
 
-  # 4. Terraform 初期化
+  # 4) Terraform init（_TF_ACTION=skip のときはスキップ）
   - id: 'tf-init'
     name: 'hashicorp/terraform:1.8'
-    entrypoint: 'terraform'
-    args: ['-chdir=infra', 'init', '-backend-config=backend.hcl']
+    entrypoint: 'bash'
+    args:
+      - -lc
+      - |
+        set -euo pipefail
+        [[ "${_TF_ACTION:-plan}" =~ ^(plan|apply)$ ]] || { echo "[skip] tf-init"; exit 0; }
+        terraform -chdir=infra init -backend-config=backend.hcl
 
-  # 5. Terraform Plan
+  # 5) Terraform plan（_TF_ACTION=apply でも plan を作成）
   - id: 'tf-plan'
     name: 'hashicorp/terraform:1.8'
-    entrypoint: 'terraform'
+    entrypoint: 'bash'
     args:
-      - '-chdir=infra'
-      - 'plan'
-      - '-no-color'
-      - '-input=false'
-      - '-out=plan.tfout'
-      - '-var=project=${PROJECT_ID}'
-      - '-var=region=${_REGION}'
+      - -lc
+      - |
+        set -euo pipefail
+        [[ "${_TF_ACTION:-plan}" =~ ^(plan|apply)$ ]] || { echo "[skip] tf-plan"; exit 0; }
+        terraform -chdir=infra plan -no-color -input=false -out=plan.tfout \
+          -var="project=${PROJECT_ID}" -var="region=${_REGION}"
+
+  # 6) Terraform apply（_TF_ACTION=apply のときのみ実行）
+  - id: 'tf-apply'
+    name: 'hashicorp/terraform:1.8'
+    entrypoint: 'bash'
+    args:
+      - -lc
+      - |
+        set -euo pipefail
+        [[ "${_TF_ACTION:-plan}" == "apply" ]] || { echo "[skip] tf-apply"; exit 0; }
+        terraform -chdir=infra apply -auto-approve plan.tfout
