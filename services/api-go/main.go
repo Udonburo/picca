@@ -32,14 +32,6 @@ var (
 	newVertexClient = func(ctx context.Context) (*http.Client, error) {
 		return google.DefaultClient(ctx, "https://www.googleapis.com/auth/cloud-platform")
 	}
-
-	demoFS = func() fs.FS {
-		sub, err := fs.Sub(webFS, "web")
-		if err != nil {
-			panic("failed to load embedded web assets: " + err.Error())
-		}
-		return sub
-	}()
 )
 
 type explainRequest struct {
@@ -60,17 +52,23 @@ type vertexResponse struct {
 }
 
 func mountDemo(r *gin.Engine) {
-	fsys := http.FS(demoFS)
+	sub, err := fs.Sub(webFS, "web")
+	if err != nil {
+		panic("failed to load embedded web assets: " + err.Error())
+	}
+
+	fsys := http.FS(sub)
 	fileServer := http.StripPrefix("/demo/", http.FileServer(fsys))
 
-	r.GET("/demo", func(c *gin.Context) {
+	serveDemo := func(c *gin.Context) {
 		c.FileFromFS("demo.html", fsys)
-	})
+	}
 
+	r.GET("/demo", serveDemo)
 	r.GET("/demo/*filepath", func(c *gin.Context) {
 		path := strings.TrimPrefix(c.Param("filepath"), "/")
-		if path == "" {
-			c.FileFromFS("demo.html", fsys)
+		if path == "" || path == "index.html" {
+			serveDemo(c)
 			return
 		}
 		fileServer.ServeHTTP(c.Writer, c.Request)
