@@ -77,6 +77,17 @@ func mountDemo(r *gin.Engine) {
 	})
 }
 
+func mountAPI(r *gin.Engine) {
+	apiV1 := r.Group("/api/v1")
+	apiV1.POST("/score", scoreHandler)
+	apiV1.POST("/explain", explainHandler)
+	apiV1.OPTIONS("/explain", explainOptionsHandler)
+
+	for _, alias := range []string{"/explain", "/api/explain", "/v1/explain"} {
+		r.POST(alias, explainHandler)
+	}
+}
+
 func logReq(id string, status int, upstreamMs int64) {
 	log.Printf(`{"service":"go-gateway","request_id":"%s","status":%d,"upstream_ms":%d}`, id, status, upstreamMs)
 }
@@ -220,6 +231,13 @@ func scoreHandler(c *gin.Context) {
 	logReq(reqID, resp.StatusCode, duration)
 }
 
+func explainOptionsHandler(c *gin.Context) {
+	c.Header("Allow", "OPTIONS, POST")
+	c.Header("Access-Control-Allow-Methods", "OPTIONS, POST")
+	c.Header("Access-Control-Allow-Headers", "Content-Type,X-API-Key")
+	c.Status(http.StatusOK)
+}
+
 func explainHandler(c *gin.Context) {
 	reqID := requestID(c)
 
@@ -361,9 +379,8 @@ func main() {
 	r := gin.Default()
 
 	mountDemo(r)
+	mountAPI(r)
 
-	r.POST("/api/v1/score", scoreHandler)
-	r.POST("/api/v1/explain", explainHandler)
 	r.GET("/healthz", func(c *gin.Context) {
 		c.String(200, "ok")
 	})
