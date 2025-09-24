@@ -36,10 +36,42 @@ func newRouter() *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	mountDemo(r)
-	r.POST("/api/v1/score", scoreHandler)
-	r.POST("/api/v1/explain", explainHandler)
+	mountAPI(r)
 	r.GET("/healthz", func(c *gin.Context) { c.String(200, "ok") })
 	return r
+}
+
+func setupExplainTest(t *testing.T) {
+	t.Helper()
+
+	prevClient := newVertexClient
+	t.Cleanup(func() { newVertexClient = prevClient })
+
+	newVertexClient = func(ctx context.Context) (*http.Client, error) {
+		return &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			body, err := io.ReadAll(req.Body)
+			if err != nil {
+				return nil, err
+			}
+			req.Body.Close()
+			if !strings.Contains(string(body), "Summarize these metrics") {
+				return nil, fmt.Errorf("unexpected prompt: %s", string(body))
+			}
+			respBody := `{"candidates":[{"content":{"parts":[{"text":"Metrics look strong overall."}]}}]}`
+			r := &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader(respBody)),
+			}
+			r.Header.Set("Content-Type", "application/json")
+			return r, nil
+		})}, nil
+	}
+
+	t.Setenv("API_KEY", "secret")
+	t.Setenv("PROJECT_ID", "demo-project")
+	t.Setenv("VERTEX_REGION", "us-central1")
+	t.Setenv("VERTEX_MODEL", "gemini-2.5-flash-lite")
 }
 
 func TestDemoPageServed(t *testing.T) {
@@ -175,34 +207,7 @@ func TestScoreHandler_UpstreamTimeout(t *testing.T) {
 }
 
 func TestExplainHandler_OK(t *testing.T) {
-	prevClient := newVertexClient
-	t.Cleanup(func() { newVertexClient = prevClient })
-
-	newVertexClient = func(ctx context.Context) (*http.Client, error) {
-		return &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-			body, err := io.ReadAll(req.Body)
-			if err != nil {
-				return nil, err
-			}
-			req.Body.Close()
-			if !strings.Contains(string(body), "Summarize these metrics") {
-				return nil, fmt.Errorf("unexpected prompt: %s", string(body))
-			}
-			respBody := `{"candidates":[{"content":{"parts":[{"text":"Metrics look strong overall."}]}}]}`
-			r := &http.Response{
-				StatusCode: http.StatusOK,
-				Header:     make(http.Header),
-				Body:       io.NopCloser(strings.NewReader(respBody)),
-			}
-			r.Header.Set("Content-Type", "application/json")
-			return r, nil
-		})}, nil
-	}
-
-	t.Setenv("API_KEY", "secret")
-	t.Setenv("PROJECT_ID", "demo-project")
-	t.Setenv("VERTEX_REGION", "us-central1")
-	t.Setenv("VERTEX_MODEL", "gemini-2.5-flash-lite")
+	setupExplainTest(t)
 
 	r := newRouter()
 
@@ -238,5 +243,63 @@ func TestExplainHandler_OK(t *testing.T) {
 	}
 	if resp.Region != "us-central1" {
 		t.Fatalf("unexpected region: %s", resp.Region)
+	}
+}
+
+func TestExplainHandler_OPTIONS(t *testing.T) {
+	setupExplainTest(t)
+
+	r := newRouter()
+	req := httptest.NewRequest(http.MethodOptions, "/api/v1/explain", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d; body=%s", w.Code, w.Body.String())
+	}
+	if allow := w.Header().Get("Allow"); !strings.Contains(allow, "OPTIONS") || !strings.Contains(allow, "POST") {
+		t.Fatalf("unexpected Allow header: %q", allow)
+	}
+	if methods := w.Header().Get("Access-Control-Allow-Methods"); methods == "" {
+		t.Fatalf("missing Access-Control-Allow-Methods header")
+	}
+}
+
+func TestExplainHandler_AliasPaths(t *testing.T) {
+	setupExplainTest(t)
+
+	r := newRouter()
+	body := []byte(`{"score":88.5,"symmetry":0.92,"power":0.81,"consistency":0.77}`)
+	for _, alias := range []string{"/explain", "/api/explain", "/v1/explain"} {
+		alias := alias
+		t.Run(alias, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, alias, bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("X-API-Key", "secret")
+			req.Header.Set("X-Request-Id", "alias-test")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("want 200, got %d; body=%s", w.Code, w.Body.String())
+			}
+			var resp struct {
+				Summary string `json:"summary"`
+				Model   string `json:"model"`
+				Region  string `json:"region"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("invalid JSON: %v", err)
+			}
+			if resp.Summary == "" {
+				t.Fatalf("missing summary for %s", alias)
+			}
+			if resp.Model != "gemini-2.5-flash-lite" {
+				t.Fatalf("unexpected model for %s: %s", alias, resp.Model)
+			}
+			if resp.Region != "us-central1" {
+				t.Fatalf("unexpected region for %s: %s", alias, resp.Region)
+			}
+		})
 	}
 }

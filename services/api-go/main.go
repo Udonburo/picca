@@ -32,14 +32,6 @@ var (
 	newVertexClient = func(ctx context.Context) (*http.Client, error) {
 		return google.DefaultClient(ctx, "https://www.googleapis.com/auth/cloud-platform")
 	}
-
-	demoFS = func() fs.FS {
-		sub, err := fs.Sub(webFS, "web")
-		if err != nil {
-			panic("failed to load embedded web assets: " + err.Error())
-		}
-		return sub
-	}()
 )
 
 type explainRequest struct {
@@ -60,21 +52,38 @@ type vertexResponse struct {
 }
 
 func mountDemo(r *gin.Engine) {
-	fsys := http.FS(demoFS)
+	sub, err := fs.Sub(webFS, "web")
+	if err != nil {
+		panic("failed to load embedded web assets: " + err.Error())
+	}
+
+	fsys := http.FS(sub)
 	fileServer := http.StripPrefix("/demo/", http.FileServer(fsys))
 
-	r.GET("/demo", func(c *gin.Context) {
+	serveDemo := func(c *gin.Context) {
 		c.FileFromFS("demo.html", fsys)
-	})
+	}
 
+	r.GET("/demo", serveDemo)
 	r.GET("/demo/*filepath", func(c *gin.Context) {
 		path := strings.TrimPrefix(c.Param("filepath"), "/")
-		if path == "" {
-			c.FileFromFS("demo.html", fsys)
+		if path == "" || path == "index.html" {
+			serveDemo(c)
 			return
 		}
 		fileServer.ServeHTTP(c.Writer, c.Request)
 	})
+}
+
+func mountAPI(r *gin.Engine) {
+	apiV1 := r.Group("/api/v1")
+	apiV1.POST("/score", scoreHandler)
+	apiV1.POST("/explain", explainHandler)
+	apiV1.OPTIONS("/explain", explainOptionsHandler)
+
+	for _, alias := range []string{"/explain", "/api/explain", "/v1/explain"} {
+		r.POST(alias, explainHandler)
+	}
 }
 
 func logReq(id string, status int, upstreamMs int64) {
@@ -220,6 +229,13 @@ func scoreHandler(c *gin.Context) {
 	logReq(reqID, resp.StatusCode, duration)
 }
 
+func explainOptionsHandler(c *gin.Context) {
+	c.Header("Allow", "OPTIONS, POST")
+	c.Header("Access-Control-Allow-Methods", "OPTIONS, POST")
+	c.Header("Access-Control-Allow-Headers", "Content-Type,X-API-Key")
+	c.Status(http.StatusOK)
+}
+
 func explainHandler(c *gin.Context) {
 	reqID := requestID(c)
 
@@ -361,9 +377,8 @@ func main() {
 	r := gin.Default()
 
 	mountDemo(r)
+	mountAPI(r)
 
-	r.POST("/api/v1/score", scoreHandler)
-	r.POST("/api/v1/explain", explainHandler)
 	r.GET("/healthz", func(c *gin.Context) {
 		c.String(200, "ok")
 	})
