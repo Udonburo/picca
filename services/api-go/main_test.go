@@ -35,10 +35,29 @@ func newRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.Use(gin.Recovery())
+	mountDemo(r)
 	r.POST("/api/v1/score", scoreHandler)
 	r.POST("/api/v1/explain", explainHandler)
 	r.GET("/healthz", func(c *gin.Context) { c.String(200, "ok") })
 	return r
+}
+
+func TestDemoPageServed(t *testing.T) {
+	r := newRouter()
+
+	req := httptest.NewRequest(http.MethodGet, "/demo", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); !strings.Contains(ct, "text/html") {
+		t.Fatalf("unexpected content type: %q", ct)
+	}
+	if body := w.Body.String(); !strings.Contains(body, "picca demo") {
+		t.Fatalf("unexpected body: %s", body)
+	}
 }
 
 func TestScoreHandler_OK(t *testing.T) {

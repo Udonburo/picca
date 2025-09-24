@@ -3,10 +3,12 @@ package main
 import (
 	"bytes"
 	"context"
+	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -21,12 +23,23 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
+//go:embed web/*
+var webFS embed.FS
+
 var (
 	httpClient = &http.Client{Timeout: 3 * time.Second}
 
 	newVertexClient = func(ctx context.Context) (*http.Client, error) {
 		return google.DefaultClient(ctx, "https://www.googleapis.com/auth/cloud-platform")
 	}
+
+	demoFS = func() fs.FS {
+		sub, err := fs.Sub(webFS, "web")
+		if err != nil {
+			panic("failed to load embedded web assets: " + err.Error())
+		}
+		return sub
+	}()
 )
 
 type explainRequest struct {
@@ -44,6 +57,24 @@ type vertexResponse struct {
 			} `json:"parts"`
 		} `json:"content"`
 	} `json:"candidates"`
+}
+
+func mountDemo(r *gin.Engine) {
+	fsys := http.FS(demoFS)
+	fileServer := http.StripPrefix("/demo/", http.FileServer(fsys))
+
+	r.GET("/demo", func(c *gin.Context) {
+		c.FileFromFS("demo.html", fsys)
+	})
+
+	r.GET("/demo/*filepath", func(c *gin.Context) {
+		path := strings.TrimPrefix(c.Param("filepath"), "/")
+		if path == "" {
+			c.FileFromFS("demo.html", fsys)
+			return
+		}
+		fileServer.ServeHTTP(c.Writer, c.Request)
+	})
 }
 
 func logReq(id string, status int, upstreamMs int64) {
@@ -328,6 +359,8 @@ func explainHandler(c *gin.Context) {
 func main() {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
+
+	mountDemo(r)
 
 	r.POST("/api/v1/score", scoreHandler)
 	r.POST("/api/v1/explain", explainHandler)
