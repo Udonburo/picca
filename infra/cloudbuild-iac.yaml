@@ -1,5 +1,11 @@
+substitutions:
+  _REGION: 'asia-northeast1'
+  _TF_ACTION: 'plan'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
 steps:
-  # 0) _REGION ガード
   - id: 'guard-region'
     name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
@@ -13,7 +19,6 @@ steps:
           exit 1
         fi
 
-  # 1) backend.hcl 生成（_TF_BACKEND_BUCKET 必須、$$ で置換回避）
   - id: 'gen-backend-hcl'
     name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
@@ -21,46 +26,52 @@ steps:
       - -lc
       - |
         set -euo pipefail
-        bucket="${_TF_BACKEND_BUCKET:-${TF_BACKEND_BUCKET:-}}"
-        prefix="${_TFSTATE_PREFIX:-${TFSTATE_PREFIX:-terraform/state}}"
-        impersonate_sa="${_TF_BACKEND_IMPERSONATE_SA:-${TF_BACKEND_IMPERSONATE_SA:-}}"
-
-        if [[ -z "$$bucket" ]]; then
-          echo "ERROR: Provide _TF_BACKEND_BUCKET (or legacy TF_BACKEND_BUCKET) in the trigger substitutions." 1>&2
+        BUCKET="${_TF_BACKEND_BUCKET:-${TF_BACKEND_BUCKET:-}}"
+        if [[ -z "$$BUCKET" ]]; then
+          echo "ERROR: Provide _TF_BACKEND_BUCKET (or TF_BACKEND_BUCKET)." 1>&2
           exit 1
         fi
-
+        PREFIX="${_TFSTATE_PREFIX:-${TFSTATE_PREFIX:-infra/state}}"
+        IMPERSONATE="${_TF_BACKEND_IMPERSONATE_SA:-${TF_BACKEND_IMPERSONATE_SA:-}}"
         {
-          printf 'bucket = "%s"\n' "$$bucket"
-          printf 'prefix = "%s"\n' "$$prefix"
-          if [[ -n "$$impersonate_sa" ]]; then
-            printf 'impersonate_service_account = "%s"\n' "$$impersonate_sa"
+          printf 'bucket = "%s"\n' "$$BUCKET"
+          printf 'prefix = "%s"\n' "$$PREFIX"
+          if [[ -n "$$IMPERSONATE" ]]; then
+            printf 'impersonate_service_account = "%s"\n' "$$IMPERSONATE"
           fi
         } > infra/backend.hcl
+        echo "[ok] wrote infra/backend.hcl -> bucket=$$BUCKET, prefix=$$PREFIX"
 
-  # 2) terraform init
   - id: 'tf-init'
     name: 'hashicorp/terraform:1.8'
-    entrypoint: 'terraform'
-    args: ['-chdir=infra', 'init', '-backend-config=backend.hcl']
+    entrypoint: 'bash'
+    args:
+      - -lc
+      - |
+        set -euo pipefail
+        action="${_TF_ACTION:-plan}"
+        [[ "${action}" =~ ^(plan|apply)$ ]] || { echo "[skip] tf-init"; exit 0; }
+        terraform -chdir=infra init -backend-config=backend.hcl
 
-  # 3) terraform plan
   - id: 'tf-plan'
     name: 'hashicorp/terraform:1.8'
-    entrypoint: 'terraform'
+    entrypoint: 'bash'
     args:
-      - '-chdir=infra'
-      - 'plan'
-      - '-input=false'
-      - '-out=tfplan'
-      - "-var=project=${PROJECT_ID}"
-      - "-var=region=${_REGION}"
+      - -lc
+      - |
+        set -euo pipefail
+        action="${_TF_ACTION:-plan}"
+        [[ "${action}" =~ ^(plan|apply)$ ]] || { echo "[skip] tf-plan"; exit 0; }
+        terraform -chdir=infra plan -no-color -input=false -out=plan.tfout \
+          -var="project=${PROJECT_ID}" -var="region=${_REGION}"
 
-  # 4) terraform apply
   - id: 'tf-apply'
     name: 'hashicorp/terraform:1.8'
-    entrypoint: 'terraform'
-    args: ['-chdir=infra', 'apply', '-auto-approve', 'tfplan']
-
-options:
-  logging: CLOUD_LOGGING_ONLY
+    entrypoint: 'bash'
+    args:
+      - -lc
+      - |
+        set -euo pipefail
+        action="${_TF_ACTION:-plan}"
+        [[ "${action}" == "apply" ]] || { echo "[skip] tf-apply"; exit 0; }
+        terraform -chdir=infra apply -auto-approve plan.tfout

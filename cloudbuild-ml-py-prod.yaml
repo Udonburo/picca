@@ -1,11 +1,12 @@
-﻿# ===== Picca ML PY: prod build & deploy & smoke =====
+# ===== Picca ML PY: prod build & deploy & smoke =====
 # Substitutions: _REGION, _TAG_NAME, _MODEL_BUCKET
 # Example: --substitutions="_REGION=YOUR_REGION,_TAG_NAME=v0.1.1,_MODEL_BUCKET=picca-models"
 
 substitutions:
+  _REGION: 'asia-northeast1'
   _TAG_NAME: "v0.1.1"
   _MODEL_BUCKET: "picca-models"
-  # _REGION: 'unset' ← この行は不要であれば削除してOKです
+  # Override _REGION in the trigger if you deploy to a different region.
 
 options:
   logging: CLOUD_LOGGING_ONLY
@@ -111,7 +112,8 @@ steps:
             echo "Smoke OK"
             exit 0
           fi
-          [ "$i" -eq 5 ] && { echo "predict failed with HTTP $code"; curl -i "${AUTH_HDR[@]}" -H "Content-Type: application/json" -X POST "$$URL/predict" --data-binary "$body" || true; exit 1; }
+          [ "$i" -eq 5 ] && { echo "predict failed with HTTP $code"; curl -i "${AUTH_HDR[@]}" -H "Content-Type: application/json" \
+            -X POST "$$URL/predict" --data-binary "$body" || true; exit 1; }
           sleep 4
         done
 

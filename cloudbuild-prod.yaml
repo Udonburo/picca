@@ -6,6 +6,7 @@ availableSecrets:
       env: "DB_PASSWORD"
 
 substitutions:
+  _REGION: 'asia-northeast1'
   _SERVICE: 'picca-prod'
   _TF_ACTION: 'apply'
 
@@ -24,35 +25,32 @@ steps:
       - -lc
       - |
         set -euo pipefail
-        region="${_REGION}"
+        region="${_REGION:-}"
         if [[ -z "${region}" || "${region}" == "unset" ]]; then
           echo "ERROR: _REGION must be set in the Cloud Build trigger (e.g., asia-northeast1)." 1>&2
           exit 1
         fi
 
-  # 1. ユニットテスト
   - id: 'run-unit-tests'
     name: 'node:20'
     entrypoint: 'bash'
-    secretEnv:
-      - 'DB_PASSWORD'
+    secretEnv: ['DB_PASSWORD']
     args:
-      - '-c'
+      - -lc
       - |
-        echo "Running tests with DB_PASSWORD=$$DB_PASSWORD"
-        npm ci && npm test -- --ci
+        set -euo pipefail
+        echo "Running tests..."
+        npm ci
+        npm test -- --ci
 
-  # 2. Docker ビルド＆プッシュ
-  - id: 'build-and-push-image'
+  - id: 'build-image'
     name: 'gcr.io/cloud-builders/docker'
-    entrypoint: 'bash'
-    args:
-      - '-c'
-      - |
-        docker build -t gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA .
-        docker push gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA', '.']
 
-  # 3. Cloud Run 本番デプロイ
+  - id: 'push-image'
+    name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA']
+
   - id: 'deploy-to-cloud-run'
     name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
@@ -62,13 +60,11 @@ steps:
         set -euo pipefail
         region="${_REGION}"
         service="${_SERVICE}"
-        service_override="$(printenv SERVICE || true)"
-        if [ -n "${service_override}" ]; then
-          service="${service_override}"
+        if [[ -n "$${SERVICE:-}" ]]; then
+          service="$${SERVICE}"
         fi
-        image_override="$(printenv IMAGE || true)"
-        if [ -n "${image_override}" ]; then
-          image="${image_override}"
+        if [[ -n "$${IMAGE:-}" ]]; then
+          image="$${IMAGE}"
         else
           image="gcr.io/${PROJECT_ID}/${service}:${SHORT_SHA}"
         fi
@@ -81,47 +77,59 @@ steps:
           --set-secrets=DB_PASSWORD=DB_PASSWORD:latest \
           --quiet
 
-  # 4. Terraform 初期化
-  - id: 'write-backend-config'
+  - id: 'gen-backend-hcl'
     name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
     args:
       - -lc
       - |
         set -euo pipefail
-        bucket="${_TF_BACKEND_BUCKET:-${TF_BACKEND_BUCKET:-}}"
-        prefix="${_TF_BACKEND_PREFIX:-${TF_BACKEND_PREFIX:-terraform/state}}"
-        impersonate_sa="${_TF_BACKEND_IMPERSONATE_SA:-${TF_BACKEND_IMPERSONATE_SA:-}}"
-
-        if [[ -z "${bucket}" ]]; then
-          echo "ERROR: Provide _TF_BACKEND_BUCKET (or legacy TF_BACKEND_BUCKET) in the trigger substitutions." 1>&2
+        BUCKET="${_TF_BACKEND_BUCKET:-${TF_BACKEND_BUCKET:-}}"
+        if [[ -z "$$BUCKET" ]]; then
+          echo "ERROR: Provide _TF_BACKEND_BUCKET (or TF_BACKEND_BUCKET)." 1>&2
           exit 1
         fi
-
+        PREFIX="${_TFSTATE_PREFIX:-${TFSTATE_PREFIX:-infra/state}}"
+        IMPERSONATE="${_TF_BACKEND_IMPERSONATE_SA:-${TF_BACKEND_IMPERSONATE_SA:-}}"
         {
-          printf 'bucket = "%s"\n' "${bucket}"
-          printf 'prefix = "%s"\n' "${prefix}"
-          if [[ -n "${impersonate_sa}" ]]; then
-            printf 'impersonate_service_account = "%s"\n' "${impersonate_sa}"
+          printf 'bucket = "%s"\n' "$$BUCKET"
+          printf 'prefix = "%s"\n' "$$PREFIX"
+          if [[ -n "$$IMPERSONATE" ]]; then
+            printf 'impersonate_service_account = "%s"\n' "$$IMPERSONATE"
           fi
         } > infra/backend.hcl
+        echo "[ok] wrote infra/backend.hcl -> bucket=$$BUCKET, prefix=$$PREFIX"
 
   - id: 'tf-init'
     name: 'hashicorp/terraform:1.8'
-    entrypoint: 'terraform'
+    entrypoint: 'bash'
     args:
-      - '-chdir=infra'
-      - 'init'
-      - '-backend-config=backend.hcl'
+      - -lc
+      - |
+        set -euo pipefail
+        action="${_TF_ACTION:-plan}"
+        [[ "${action}" =~ ^(plan|apply)$ ]] || { echo "[skip] tf-init"; exit 0; }
+        terraform -chdir=infra init -backend-config=backend.hcl
 
-  # 5. Terraform apply
+  - id: 'tf-plan'
+    name: 'hashicorp/terraform:1.8'
+    entrypoint: 'bash'
+    args:
+      - -lc
+      - |
+        set -euo pipefail
+        action="${_TF_ACTION:-plan}"
+        [[ "${action}" =~ ^(plan|apply)$ ]] || { echo "[skip] tf-plan"; exit 0; }
+        terraform -chdir=infra plan -no-color -input=false -out=plan.tfout \
+          -var="project=${PROJECT_ID}" -var="region=${_REGION}"
+
   - id: 'tf-apply'
     name: 'hashicorp/terraform:1.8'
-    entrypoint: 'terraform'
+    entrypoint: 'bash'
     args:
-      - '-chdir=infra'
-      - 'apply'
-      - '-var=project=${PROJECT_ID}'
-      - '-var=region=${_REGION}'
-      - '-auto-approve'
-
+      - -lc
+      - |
+        set -euo pipefail
+        action="${_TF_ACTION:-plan}"
+        [[ "${action}" == "apply" ]] || { echo "[skip] tf-apply"; exit 0; }
+        terraform -chdir=infra apply -auto-approve plan.tfout

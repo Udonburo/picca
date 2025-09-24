@@ -4,8 +4,9 @@ availableSecrets:
       env: "DB_PASSWORD"
 
 substitutions:
-  _TF_ACTION: 'plan'       # plan|apply|skip（skip なら IaC を飛ばす）
-  _SERVICE: 'picca-stg'    # デフォルトサービス名（SERVICE/IMAGE env で上書き可）
+  _REGION: 'asia-northeast1'
+  _SERVICE: 'picca-stg'
+  _TF_ACTION: 'plan'
 
 images:
   - "gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA"
@@ -15,7 +16,6 @@ options:
   machineType: UNSPECIFIED
 
 steps:
-  # 0) _REGION は必須
   - id: 'guard-region'
     name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
@@ -29,19 +29,17 @@ steps:
           exit 1
         fi
 
-  # 1) ユニットテスト
   - id: 'install-and-test'
     name: 'node:20'
     entrypoint: 'bash'
     secretEnv: ['DB_PASSWORD']
     args:
-      - -c
+      - -lc
       - |
         set -euo pipefail
         npm ci
         npm test -- --ci
 
-  # 2) Docker build & push
   - id: 'build-image'
     name: 'gcr.io/cloud-builders/docker'
     args: ['build', '-t', 'gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA', '.']
@@ -50,7 +48,6 @@ steps:
     name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA']
 
-  # 3) Cloud Run deploy
   - id: 'deploy-to-cloud-run'
     name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
@@ -60,8 +57,14 @@ steps:
         set -euo pipefail
         region="${_REGION}"
         service="${_SERVICE}"
-        if [[ -n "${SERVICE:-}" ]]; then service="${SERVICE}"; fi
-        if [[ -n "${IMAGE:-}" ]];  then image="${IMAGE}"; else image="gcr.io/$PROJECT_ID/${service}:$SHORT_SHA"; fi
+        if [[ -n "$${SERVICE:-}" ]]; then
+          service="$${SERVICE}"
+        fi
+        if [[ -n "$${IMAGE:-}" ]]; then
+          image="$${IMAGE}"
+        else
+          image="gcr.io/$PROJECT_ID/${service}:$SHORT_SHA"
+        fi
 
         gcloud run deploy "${service}" \
           --image "${image}" \
@@ -71,7 +74,6 @@ steps:
           --allow-unauthenticated \
           --quiet
 
-  # 3.5) Terraform backend.hcl 生成（Cloud Build 置換を回避するため $$ を使用）
   - id: 'gen-backend-hcl'
     name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
@@ -81,14 +83,20 @@ steps:
         set -euo pipefail
         BUCKET="${_TF_BACKEND_BUCKET:-${TF_BACKEND_BUCKET:-}}"
         if [[ -z "$$BUCKET" ]]; then
-          echo "ERROR: Provide _TF_BACKEND_BUCKET in trigger substitutions, or export TF_BACKEND_BUCKET." 1>&2
+          echo "ERROR: Provide _TF_BACKEND_BUCKET (or TF_BACKEND_BUCKET)." 1>&2
           exit 1
         fi
         PREFIX="${_TFSTATE_PREFIX:-${TFSTATE_PREFIX:-infra/state}}"
-        printf 'bucket = "%s"\nprefix = "%s"\n' "$$BUCKET" "$$PREFIX" > infra/backend.hcl
+        IMPERSONATE="${_TF_BACKEND_IMPERSONATE_SA:-${TF_BACKEND_IMPERSONATE_SA:-}}"
+        {
+          printf 'bucket = "%s"\n' "$$BUCKET"
+          printf 'prefix = "%s"\n' "$$PREFIX"
+          if [[ -n "$$IMPERSONATE" ]]; then
+            printf 'impersonate_service_account = "%s"\n' "$$IMPERSONATE"
+          fi
+        } > infra/backend.hcl
         echo "[ok] wrote infra/backend.hcl -> bucket=$$BUCKET, prefix=$$PREFIX"
 
-  # 4) Terraform init（_TF_ACTION=skip のときはスキップ）
   - id: 'tf-init'
     name: 'hashicorp/terraform:1.8'
     entrypoint: 'bash'
@@ -96,10 +104,10 @@ steps:
       - -lc
       - |
         set -euo pipefail
-        [[ "${_TF_ACTION:-plan}" =~ ^(plan|apply)$ ]] || { echo "[skip] tf-init"; exit 0; }
+        action="${_TF_ACTION:-plan}"
+        [[ "${action}" =~ ^(plan|apply)$ ]] || { echo "[skip] tf-init"; exit 0; }
         terraform -chdir=infra init -backend-config=backend.hcl
 
-  # 5) Terraform plan（_TF_ACTION=apply でも plan を作成）
   - id: 'tf-plan'
     name: 'hashicorp/terraform:1.8'
     entrypoint: 'bash'
@@ -107,11 +115,11 @@ steps:
       - -lc
       - |
         set -euo pipefail
-        [[ "${_TF_ACTION:-plan}" =~ ^(plan|apply)$ ]] || { echo "[skip] tf-plan"; exit 0; }
+        action="${_TF_ACTION:-plan}"
+        [[ "${action}" =~ ^(plan|apply)$ ]] || { echo "[skip] tf-plan"; exit 0; }
         terraform -chdir=infra plan -no-color -input=false -out=plan.tfout \
           -var="project=${PROJECT_ID}" -var="region=${_REGION}"
 
-  # 6) Terraform apply（_TF_ACTION=apply のときのみ実行）
   - id: 'tf-apply'
     name: 'hashicorp/terraform:1.8'
     entrypoint: 'bash'
@@ -119,5 +127,6 @@ steps:
       - -lc
       - |
         set -euo pipefail
-        [[ "${_TF_ACTION:-plan}" == "apply" ]] || { echo "[skip] tf-apply"; exit 0; }
+        action="${_TF_ACTION:-plan}"
+        [[ "${action}" == "apply" ]] || { echo "[skip] tf-apply"; exit 0; }
         terraform -chdir=infra apply -auto-approve plan.tfout
