@@ -75,14 +75,28 @@ func mountDemo(r *gin.Engine) {
 	})
 }
 
+func apiKeyMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		reqID := requestID(c)
+		if !validateAPIKey(c, reqID) {
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
 func mountAPI(r *gin.Engine) {
 	apiV1 := r.Group("/api/v1")
 	apiV1.POST("/score", scoreHandler)
-	apiV1.POST("/explain", explainHandler)
 	apiV1.OPTIONS("/explain", explainOptionsHandler)
 
+	api := r.Group("/api/v1", apiKeyMiddleware())
+	api.POST("/explain", explainHandler)
+	log.Println("mounted /api/v1/explain")
+
 	for _, alias := range []string{"/explain", "/api/explain", "/v1/explain"} {
-		r.POST(alias, explainHandler)
+		r.POST(alias, apiKeyMiddleware(), explainHandler)
 	}
 }
 
@@ -263,16 +277,12 @@ func explainHandler(c *gin.Context) {
 
 	region := strings.TrimSpace(os.Getenv("VERTEX_REGION"))
 	if region == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "server misconfigured", "reason_code": "MISCONFIGURED_VERTEX_REGION"})
-		logReq(reqID, http.StatusInternalServerError, 0)
-		return
+		region = "us-central1"
 	}
 
 	model := strings.TrimSpace(os.Getenv("VERTEX_MODEL"))
 	if model == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "server misconfigured", "reason_code": "MISCONFIGURED_VERTEX_MODEL"})
-		logReq(reqID, http.StatusInternalServerError, 0)
-		return
+		model = "gemini-2.5-flash-lite"
 	}
 
 	projectID, err := resolveProjectID(c.Request.Context())
@@ -316,7 +326,12 @@ func explainHandler(c *gin.Context) {
 	escapedProject := url.PathEscape(projectID)
 	escapedRegion := url.PathEscape(region)
 	escapedModel := url.PathEscape(model)
-	vertexURL := fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/google/models/%s:generateContent", region, escapedProject, escapedRegion, escapedModel)
+
+	host := fmt.Sprintf("%s-aiplatform.googleapis.com", region)
+	if region == "global" {
+		host = "aiplatform.googleapis.com"
+	}
+	vertexURL := fmt.Sprintf("https://%s/v1/projects/%s/locations/%s/publishers/google/models/%s:generateContent", host, escapedProject, escapedRegion, escapedModel)
 
 	vertexReq, err := http.NewRequestWithContext(ctx, http.MethodPost, vertexURL, bytes.NewReader(reqBytes))
 	if err != nil {
@@ -352,8 +367,8 @@ func explainHandler(c *gin.Context) {
 	}
 
 	if vertexResp.StatusCode < 200 || vertexResp.StatusCode >= 300 {
-		c.JSON(http.StatusBadGateway, gin.H{"error": "vertex upstream error", "reason_code": "VERTEX_BAD_STATUS"})
-		logReq(reqID, http.StatusBadGateway, duration)
+		c.Data(vertexResp.StatusCode, vertexResp.Header.Get("Content-Type"), respBody)
+		logReq(reqID, vertexResp.StatusCode, duration)
 		return
 	}
 
