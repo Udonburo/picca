@@ -16,27 +16,31 @@ steps:
           echo "ERROR: _REGION must be set in the Cloud Build trigger (e.g., asia-northeast1)." 1>&2
           exit 1
         fi
+
   - name: python:3.11
     id: "unit tests (ml_py)"
     entrypoint: bash
     dir: services/ml_py
-    args: [
-      "-lc",
-      "python -m pip install -U pip -q && \
-       pip install -r requirements.txt -q && \
-       pip install pytest 'httpx<0.28' -q && \
-       python -m pytest -q"
-    ]
+    args:
+      - -lc
+      - |
+        python -m pip install -U pip -q
+        pip install -r requirements.txt -q
+        pip install pytest 'httpx<0.28' -q
+        python -m pytest -q
+
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Build-ML-Py'
     args:
       - build
-      - -f
-      - services/ml_py/Dockerfile
       - -t
       - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/picca-backend/picca-ml-py-stg:latest'
-      - '.'
+      - -f
+      - services/ml_py/Dockerfile
+      - services/ml_py      # ← ★ コンテキストをルート(.)からservices/ml_pyへ変更
+
 images:
   - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/picca-backend/picca-ml-py-stg:latest'
+
 options:
   logging: CLOUD_LOGGING_ONLY
