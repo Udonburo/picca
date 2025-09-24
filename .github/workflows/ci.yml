@@ -22,6 +22,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Guard Cloud Build substitutions
+        run: |
+          set -euo pipefail
+          ALLOW='PROJECT_ID|SHORT_SHA|COMMIT_SHA|BUILD_ID|REPO_NAME|BRANCH_NAME|TAG_NAME|REVISION_ID|TRIGGER_NAME'
+          PATTERN='(?<!\$)\$(?!('"$ALLOW"')\b)[A-Z][A-Z0-9_]*\b|(?<!\$)\$\{(?!('"$ALLOW"')\})([A-Z][A-Z0-9_]*)\}'
+          files=$(git ls-files '*cloudbuild*.yaml' 'infra/*.yaml' || true)
+          if [ -n "$files" ] && (echo "$files" | xargs -r grep -nP "$PATTERN"); then
+            echo 'Found raw $VAR tokens not in allow-list. Use $$VAR instead (or _SUBST in substitutions:).' >&2
+            exit 1
+          fi
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
