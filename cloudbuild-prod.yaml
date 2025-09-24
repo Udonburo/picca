@@ -6,6 +6,7 @@ availableSecrets:
       env: "DB_PASSWORD"
 
 substitutions:
+  _REGION: 'asia-northeast1'
   _SERVICE: 'picca-prod'
   _TF_ACTION: 'apply'
 

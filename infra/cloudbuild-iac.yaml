@@ -1,3 +1,7 @@
+substitutions:
+  _REGION: 'asia-northeast1'
+  _TF_ACTION: 'plan'
+
 options:
   logging: CLOUD_LOGGING_ONLY
 
