@@ -26,6 +26,12 @@ resource "google_cloudbuild_trigger" "main-branch-trigger" {
 
   service_account = "projects/${var.project}/serviceAccounts/terraform-sa@${var.project}.iam.gserviceaccount.com"
 
+  substitutions = {
+    _REGION    = var.region
+    _SERVICE   = "picca-stg"
+    _TF_ACTION = "plan"
+  }
+
   repository_event_config {
     repository = google_cloudbuildv2_repository.picca_repository.id
     push {
@@ -45,6 +51,11 @@ resource "google_cloudbuild_trigger" "iac-branch-trigger" {
 
   service_account = "projects/${var.project}/serviceAccounts/terraform-sa@${var.project}.iam.gserviceaccount.com"
 
+  substitutions = {
+    _REGION    = var.region
+    _TF_ACTION = "plan"
+  }
+
   repository_event_config {
     repository = google_cloudbuildv2_repository.picca_repository.id
     push {
@@ -63,6 +74,11 @@ resource "google_cloudbuild_trigger" "iac-tag-trigger" {
   name     = "iac-tag-trigger"
 
   service_account = "projects/${var.project}/serviceAccounts/terraform-sa@${var.project}.iam.gserviceaccount.com"
+
+  substitutions = {
+    _REGION    = var.region
+    _TF_ACTION = "plan"
+  }
 
   repository_event_config {
     repository = google_cloudbuildv2_repository.picca_repository.id
