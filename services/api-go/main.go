@@ -447,16 +447,22 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-	finalHandler := withHealthz(r)
-	log.Printf("server handler: %T (wrapped with /healthz)", finalHandler)
-	log.Printf("🚀 listening on :%s …", port)
+	addr := ":" + port
+
+	mux := http.NewServeMux()
+	mux.Handle("/", r)
+	mux.HandleFunc("/healthz", healthz)
+	mux.HandleFunc("/healthz/", healthz)
+
+	finalHandler := withHealthz(mux)
+	log.Printf("server ready on %s; handler=%T (final mux with /healthz)", addr, finalHandler)
 
 	srv := &http.Server{
-		Addr:    ":" + port,
+		Addr:    addr,
 		Handler: finalHandler,
 	}
 
-	if err := srv.ListenAndServe(); err != nil {
-		log.Fatalf("server error: %v", err)
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("listen: %v", err)
 	}
 }
