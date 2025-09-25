@@ -404,11 +404,18 @@ func explainHandler(c *gin.Context) {
 func main() {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
+	r.GET("/healthz", gin.WrapF(healthz))
+	r.HEAD("/healthz", gin.WrapF(healthz))
+	log.Println("gin: mounted /healthz on engine")
+	for _, ri := range r.Routes() {
+		if ri.Path == "/healthz" {
+			log.Printf("gin route %s %s", ri.Method, ri.Path)
+		}
+	}
 
 	mountDemo(r)
 	mountAPI(r)
 
-	r.Any("/healthz", gin.WrapF(healthz))
 	r.GET("/readyz", func(c *gin.Context) {
 		c.String(200, "ready")
 	})
