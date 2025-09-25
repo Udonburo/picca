@@ -408,12 +408,7 @@ func main() {
 	mountDemo(r)
 	mountAPI(r)
 
-	r.GET("/healthz", func(c *gin.Context) {
-		c.String(200, "ok")
-	})
-	r.HEAD("/healthz", func(c *gin.Context) {
-		c.Status(200)
-	})
+	r.Any("/healthz", gin.WrapF(healthz))
 	r.GET("/readyz", func(c *gin.Context) {
 		c.String(200, "ready")
 	})
