@@ -34,6 +34,25 @@ var (
 	}
 )
 
+// withHealthz ensures /healthz is served at the outermost layer regardless of the
+// underlying router configuration.
+func withHealthz(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/healthz" {
+			switch r.Method {
+			case http.MethodGet:
+				healthz(w, r)
+			case http.MethodHead:
+				w.WriteHeader(http.StatusOK)
+			default:
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 type explainRequest struct {
 	Score       float64 `json:"score"`
 	Symmetry    float64 `json:"symmetry"`
@@ -428,8 +447,16 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
+	finalHandler := withHealthz(r)
+	log.Printf("server handler: %T (wrapped with /healthz)", finalHandler)
 	log.Printf("🚀 listening on :%s …", port)
-	if err := r.Run(":" + port); err != nil {
+
+	srv := &http.Server{
+		Addr:    ":" + port,
+		Handler: finalHandler,
+	}
+
+	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
 }
