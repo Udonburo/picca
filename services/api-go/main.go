@@ -52,27 +52,41 @@ type vertexResponse struct {
 }
 
 func mountDemo(r *gin.Engine) {
-	sub, err := fs.Sub(webFS, "web")
-	if err != nil {
-		panic("failed to load embedded web assets: " + err.Error())
+	if sub, err := fs.Sub(webFS, "web"); err == nil {
+		fsys := http.FS(sub)
+		fileServer := http.StripPrefix("/demo/", http.FileServer(fsys))
+		serveDemo := func(c *gin.Context) { c.FileFromFS("demo.html", fsys) }
+		r.GET("/demo", serveDemo)
+		r.GET("/demo/*filepath", func(c *gin.Context) {
+			p := strings.TrimPrefix(c.Param("filepath"), "/")
+			if p == "" || p == "index.html" {
+				serveDemo(c)
+				return
+			}
+			fileServer.ServeHTTP(c.Writer, c.Request)
+		})
+		log.Println("mounted /demo (embedded)")
+		return
 	}
 
-	fsys := http.FS(sub)
-	fileServer := http.StripPrefix("/demo/", http.FileServer(fsys))
-
-	serveDemo := func(c *gin.Context) {
-		c.FileFromFS("demo.html", fsys)
-	}
-
-	r.GET("/demo", serveDemo)
-	r.GET("/demo/*filepath", func(c *gin.Context) {
-		path := strings.TrimPrefix(c.Param("filepath"), "/")
-		if path == "" || path == "index.html" {
-			serveDemo(c)
-			return
-		}
-		fileServer.ServeHTTP(c.Writer, c.Request)
+	r.GET("/demo", func(c *gin.Context) {
+		c.Header("Content-Type", "text/html; charset=utf-8")
+		c.String(200, `<!doctype html><html><head><meta charset="utf-8"><title>picca demo</title></head>
+<body><h1>picca demo</h1>
+<label>API Key: <input id="k" value="dummy-api-key-for-picca"></label>
+<button id="run">Score</button><pre id="out"></pre>
+<script>
+const base=location.origin;
+document.getElementById('run').onclick=async()=>{
+  const key=(document.getElementById('k').value||'').trim();
+  const body={fps:30,keypoints:[{x:0.10,y:0.20},{x:0.30,y:0.40}]};
+  const r=await fetch(base+"/api/v1/score",{method:"POST",headers:{"Content-Type":"application/json","X-API-Key":key},body:JSON.stringify(body)});
+  const j=await r.json().catch(()=>({error:"bad json"}));
+  document.getElementById('out').textContent=JSON.stringify(j,null,2);
+};
+</script></body></html>`)
 	})
+	log.Println("mounted /demo (inline)")
 }
 
 func apiKeyMiddleware() gin.HandlerFunc {
@@ -396,6 +410,12 @@ func main() {
 
 	r.GET("/healthz", func(c *gin.Context) {
 		c.String(200, "ok")
+	})
+	r.HEAD("/healthz", func(c *gin.Context) {
+		c.Status(200)
+	})
+	r.GET("/readyz", func(c *gin.Context) {
+		c.String(200, "ready")
 	})
 	r.GET("/v1/ping", func(c *gin.Context) {
 		c.JSON(200, gin.H{"msg": "pong"})
