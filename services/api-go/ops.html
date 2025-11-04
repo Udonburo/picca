@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ja">
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Picca · LACHESIS Ops</title>
+<style>
+  :root{--bg:#0b0f14;--fg:#e6edf3;--mut:#9aa4af;--ok:#2ecc71;--ng:#e74c3c;--card:#111821}
+  body{background:var(--bg);color:var(--fg);font:14px/1.5 ui-sans-serif,system-ui,Segoe UI,Inter,Arial}
+  .wrap{max-width:760px;margin:40px auto;padding:0 16px}
+  .h{font-size:18px;margin:0 0 12px}
+  .card{background:var(--card);border-radius:16px;padding:16px 18px;box-shadow:0 2px 16px rgba(0,0,0,.25);margin:12px 0}
+  .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .btn{padding:8px 14px;border-radius:12px;border:1px solid #2b3440;background:#0f1620;color:var(--fg);cursor:pointer}
+  .btn:disabled{opacity:.6;cursor:default}
+  .tag{padding:4px 8px;border-radius:999px;font-size:12px;background:#0f1620;border:1px solid #2b3440;color:var(--mut)}
+  .ok{color:var(--ok)} .ng{color:var(--ng)}
+  code{background:#0f1620;border:1px solid #2b3440;padding:2px 6px;border-radius:8px}
+  table{width:100%;border-collapse:collapse;margin-top:8px}
+  th,td{padding:8px;border-bottom:1px solid #1c2530;text-align:left}
+  small{color:var(--mut)}
+</style>
+<div class="wrap">
+  <h1 class="h">Picca · LACHESIS Ops</h1>
+  <div class="card">
+    <div class="row">
+      <button id="ping" class="btn">/livez をチェック</button>
+      <span id="status" class="tag">待機中…</span>
+      <span id="lat" class="tag">– ms</span>
+      <span id="rid" class="tag">run_id: <code>tools/bench_picca.py · picca@<git></code></span>
+    </div>
+    <small>同一オリジン上の <code>/livez</code> を叩きます（CORS不要）。</small>
+    <table>
+      <thead><tr><th>時刻</th><th>HTTP</th><th>latency (ms)</th></tr></thead>
+      <tbody id="log"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <a class="btn" href="/ops" onclick="location.reload();return false;">更新</a>
+      <a class="btn" href="https://github.com/Udonburo/picca/tree/ops/lachesis-fig1" target="_blank">GitHub</a>
+    </div>
+    <small>Fig.1（p95/Success/Cost）は README/figs で公開。</small>
+  </div>
+</div>
+
+<script>
+  const $ = sel => document.querySelector(sel);
+  const log = (http, ms) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${new Date().toLocaleString()}</td><td>${http}</td><td>${ms.toFixed(1)}</td>`;
+    $("#log").prepend(tr);
+  };
+  $("#ping").onclick = async () => {
+    $("#ping").disabled = true;
+    const t0 = performance.now();
+    let code = 0;
+    try {
+      const res = await fetch("/livez", {cache:"no-store"});
+      code = res.status;
+    } catch (e) { code = 0; }
+    const dt = performance.now() - t0;
+    $("#lat").textContent = `${dt.toFixed(1)} ms`;
+    if (code === 200) { $("#status").textContent = "OK 200"; $("#status").classList.add("ok"); $("#status").classList.remove("ng"); }
+    else { $("#status").textContent = `ERR ${code}`; $("#status").classList.add("ng"); $("#status").classList.remove("ok"); }
+    log(code, dt);
+    $("#ping").disabled = false;
+  };
+</script>
+</html>

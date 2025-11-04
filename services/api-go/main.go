@@ -434,6 +434,7 @@ func main() {
 
 	mountDemo(r)
 	mountAPI(r)
+	mountOps(r)
 
 	r.GET("/readyz", func(c *gin.Context) {
 		c.String(200, "ready")
@@ -449,15 +450,16 @@ func main() {
 	}
 	addr := ":" + port
 
-        mux := http.NewServeMux()
-        mux.Handle("/", r)
-        mux.HandleFunc("/healthz", healthz)
-        mux.HandleFunc("/healthz/", healthz)
-        mux.HandleFunc("/livez", healthz)
-        mux.HandleFunc("/livez/", healthz)
+	mux := http.NewServeMux()
+	mux.Handle("/", r)
+	mux.HandleFunc("/healthz", healthz)
+	mux.HandleFunc("/healthz/", healthz)
+	mux.HandleFunc("/livez", healthz)
+	mux.HandleFunc("/livez/", healthz)
+	mux.Handle("/ops", OpsHandler())
 
-        finalHandler := withHealthz(mux)
-        log.Printf("mux: /livez mounted (alias of /healthz)")
+	finalHandler := withHealthz(mux)
+	log.Printf("mux: /livez mounted (alias of /healthz)")
 	log.Printf("server ready on %s; handler=%T (final mux with /healthz)", addr, finalHandler)
 
 	srv := &http.Server{
