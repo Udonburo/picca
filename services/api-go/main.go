@@ -14,9 +14,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"time"
+
+	"syscall"
 
 	"cloud.google.com/go/compute/metadata"
 	"github.com/gin-gonic/gin"
@@ -32,25 +35,31 @@ var (
 	newVertexClient = func(ctx context.Context) (*http.Client, error) {
 		return google.DefaultClient(ctx, "https://www.googleapis.com/auth/cloud-platform")
 	}
+
+	runID = deriveRunID()
 )
 
-// withHealthz ensures /healthz is served at the outermost layer regardless of the
-// underlying router configuration.
-func withHealthz(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/healthz" {
-			switch r.Method {
-			case http.MethodGet:
-				healthz(w, r)
-			case http.MethodHead:
-				w.WriteHeader(http.StatusOK)
-			default:
-				w.WriteHeader(http.StatusMethodNotAllowed)
-			}
+func deriveRunID() string {
+	script := strings.TrimSpace(os.Getenv("PICCA_SCRIPT_SHA"))
+	if script == "" {
+		script = "dev"
+	}
+	ckpt := strings.TrimSpace(os.Getenv("MODEL_CKPT_SHA"))
+	if ckpt == "" {
+		ckpt = "na"
+	}
+	return fmt.Sprintf("%s·%s", script, ckpt)
+}
+
+func apiKeyMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		requestID(c)
+		if !validateAPIKey(c) {
+			c.Abort()
 			return
 		}
-		next.ServeHTTP(w, r)
-	})
+		c.Next()
+	}
 }
 
 type explainRequest struct {
@@ -108,17 +117,6 @@ document.getElementById('run').onclick=async()=>{
 	log.Println("mounted /demo (inline)")
 }
 
-func apiKeyMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		reqID := requestID(c)
-		if !validateAPIKey(c, reqID) {
-			c.Abort()
-			return
-		}
-		c.Next()
-	}
-}
-
 func mountAPI(r *gin.Engine) {
 	apiV1 := r.Group("/api/v1")
 	apiV1.POST("/score", scoreHandler)
@@ -133,8 +131,34 @@ func mountAPI(r *gin.Engine) {
 	}
 }
 
-func logReq(id string, status int, upstreamMs int64) {
-	log.Printf(`{"service":"go-gateway","request_id":"%s","status":%d,"upstream_ms":%d}`, id, status, upstreamMs)
+func logReq(c *gin.Context, status int, latencyMs int64, inputHash, outputHash string) {
+	if status < 400 {
+		return
+	}
+	reqID := requestID(c)
+	path := c.FullPath()
+	if path == "" {
+		path = c.Request.URL.Path
+	}
+	if latencyMs < 0 {
+		latencyMs = 0
+	}
+	entry := map[string]any{
+		"ts":          time.Now().UTC().Format(time.RFC3339Nano),
+		"run_id":      runID,
+		"path":        path,
+		"status":      status,
+		"latency_ms":  latencyMs,
+		"req_id":      reqID,
+		"input_hash":  inputHash,
+		"output_hash": outputHash,
+	}
+	line, err := json.Marshal(entry)
+	if err != nil {
+		log.Printf("log marshal error: %v", err)
+		return
+	}
+	fmt.Println(string(line))
 }
 
 func maxBodyBytes() int64 {
@@ -147,33 +171,39 @@ func maxBodyBytes() int64 {
 }
 
 func requestID(c *gin.Context) string {
-	reqID := c.GetHeader("X-Request-Id")
+	if v, ok := c.Get("req_id"); ok {
+		if s, ok := v.(string); ok && s != "" {
+			return s
+		}
+	}
+	reqID := strings.TrimSpace(c.GetHeader("X-Request-Id"))
 	if reqID == "" {
 		reqID = time.Now().UTC().Format(time.RFC3339Nano)
 	}
 	c.Header("X-Request-Id", reqID)
+	c.Set("req_id", reqID)
 	return reqID
 }
 
-func validateAPIKey(c *gin.Context, reqID string) bool {
+func validateAPIKey(c *gin.Context) bool {
 	expectedKey := os.Getenv("API_KEY")
 	if expectedKey == "" {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "server misconfigured", "reason_code": "MISCONFIGURED_API_KEY"})
-		logReq(reqID, http.StatusInternalServerError, 0)
+		logReq(c, http.StatusInternalServerError, 0, "", "")
 		return false
 	}
 	if c.GetHeader("X-API-Key") != expectedKey {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized", "reason_code": "INVALID_API_KEY"})
-		logReq(reqID, http.StatusUnauthorized, 0)
+		logReq(c, http.StatusUnauthorized, 0, "", "")
 		return false
 	}
 	return true
 }
 
-func ensureJSONContentType(c *gin.Context, reqID string) bool {
-	if ct := c.GetHeader("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+func ensureJSONContentType(c *gin.Context) bool {
+	if !isJSON(c.GetHeader("Content-Type")) {
 		c.JSON(http.StatusUnsupportedMediaType, gin.H{"error": "unsupported media", "reason_code": "UNSUPPORTED_MEDIA_TYPE"})
-		logReq(reqID, http.StatusUnsupportedMediaType, 0)
+		logReq(c, http.StatusUnsupportedMediaType, 0, "", "")
 		return false
 	}
 	return true
@@ -216,10 +246,10 @@ func extractVertexSummary(body []byte) (string, error) {
 func scoreHandler(c *gin.Context) {
 	reqID := requestID(c)
 
-	if !validateAPIKey(c, reqID) {
+	if !validateAPIKey(c) {
 		return
 	}
-	if !ensureJSONContentType(c, reqID) {
+	if !ensureJSONContentType(c) {
 		return
 	}
 
@@ -227,21 +257,21 @@ func scoreHandler(c *gin.Context) {
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body", "reason_code": "INVALID_BODY"})
-		logReq(reqID, http.StatusBadRequest, 0)
+		logReq(c, http.StatusBadRequest, 0, "", "")
 		return
 	}
 
 	mlURL := strings.TrimRight(os.Getenv("API_ML_URL"), "/")
 	if mlURL == "" {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "server misconfigured", "reason_code": "MISCONFIGURED_UPSTREAM"})
-		logReq(reqID, http.StatusInternalServerError, 0)
+		logReq(c, http.StatusInternalServerError, 0, "", "")
 		return
 	}
 
 	upstreamReq, err := http.NewRequestWithContext(c.Request.Context(), http.MethodPost, mlURL+"/predict", bytes.NewReader(body))
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "ml upstream error", "reason_code": "UPSTREAM_FAILURE"})
-		logReq(reqID, http.StatusBadGateway, 0)
+		logReq(c, http.StatusBadGateway, 0, "", "")
 		return
 	}
 	upstreamReq.Header.Set("Content-Type", "application/json")
@@ -255,11 +285,11 @@ func scoreHandler(c *gin.Context) {
 		var nerr net.Error
 		if errors.As(err, &nerr) && nerr.Timeout() {
 			c.JSON(http.StatusGatewayTimeout, gin.H{"error": "ml upstream timeout", "reason_code": "UPSTREAM_TIMEOUT"})
-			logReq(reqID, http.StatusGatewayTimeout, duration)
+			logReq(c, http.StatusGatewayTimeout, duration, "", "")
 			return
 		}
 		c.JSON(http.StatusBadGateway, gin.H{"error": "ml upstream error", "reason_code": "UPSTREAM_FAILURE"})
-		logReq(reqID, http.StatusBadGateway, duration)
+		logReq(c, http.StatusBadGateway, duration, "", "")
 		return
 	}
 	defer resp.Body.Close()
@@ -267,13 +297,13 @@ func scoreHandler(c *gin.Context) {
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "ml upstream error", "reason_code": "UPSTREAM_FAILURE"})
-		logReq(reqID, http.StatusBadGateway, duration)
+		logReq(c, http.StatusBadGateway, duration, "", "")
 		return
 	}
 
 	c.Header("X-Request-Id", reqID)
 	c.Data(resp.StatusCode, resp.Header.Get("Content-Type"), respBody)
-	logReq(reqID, resp.StatusCode, duration)
+	logReq(c, resp.StatusCode, duration, "", "")
 }
 
 func explainOptionsHandler(c *gin.Context) {
@@ -286,10 +316,10 @@ func explainOptionsHandler(c *gin.Context) {
 func explainHandler(c *gin.Context) {
 	reqID := requestID(c)
 
-	if !validateAPIKey(c, reqID) {
+	if !validateAPIKey(c) {
 		return
 	}
-	if !ensureJSONContentType(c, reqID) {
+	if !ensureJSONContentType(c) {
 		return
 	}
 
@@ -297,14 +327,14 @@ func explainHandler(c *gin.Context) {
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body", "reason_code": "INVALID_BODY"})
-		logReq(reqID, http.StatusBadRequest, 0)
+		logReq(c, http.StatusBadRequest, 0, "", "")
 		return
 	}
 
 	var payload explainRequest
 	if err := json.Unmarshal(body, &payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body", "reason_code": "INVALID_BODY"})
-		logReq(reqID, http.StatusBadRequest, 0)
+		logReq(c, http.StatusBadRequest, 0, "", "")
 		return
 	}
 
@@ -321,7 +351,7 @@ func explainHandler(c *gin.Context) {
 	projectID, err := resolveProjectID(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "server misconfigured", "reason_code": "MISCONFIGURED_PROJECT_ID"})
-		logReq(reqID, http.StatusInternalServerError, 0)
+		logReq(c, http.StatusInternalServerError, 0, "", "")
 		return
 	}
 
@@ -342,7 +372,7 @@ func explainHandler(c *gin.Context) {
 	reqBytes, err := json.Marshal(vertexPayload)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error", "reason_code": "VERTEX_REQUEST_MARSHAL_ERROR"})
-		logReq(reqID, http.StatusInternalServerError, 0)
+		logReq(c, http.StatusInternalServerError, 0, "", "")
 		return
 	}
 
@@ -352,7 +382,7 @@ func explainHandler(c *gin.Context) {
 	client, err := newVertexClient(ctx)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "vertex auth error", "reason_code": "VERTEX_AUTH_FAILURE"})
-		logReq(reqID, http.StatusInternalServerError, 0)
+		logReq(c, http.StatusInternalServerError, 0, "", "")
 		return
 	}
 
@@ -369,7 +399,7 @@ func explainHandler(c *gin.Context) {
 	vertexReq, err := http.NewRequestWithContext(ctx, http.MethodPost, vertexURL, bytes.NewReader(reqBytes))
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "vertex upstream error", "reason_code": "VERTEX_REQUEST_BUILD_FAILURE"})
-		logReq(reqID, http.StatusBadGateway, 0)
+		logReq(c, http.StatusBadGateway, 0, "", "")
 		return
 	}
 	vertexReq.Header.Set("Content-Type", "application/json")
@@ -383,11 +413,11 @@ func explainHandler(c *gin.Context) {
 		var nerr net.Error
 		if errors.As(err, &nerr) && nerr.Timeout() {
 			c.JSON(http.StatusGatewayTimeout, gin.H{"error": "vertex upstream timeout", "reason_code": "VERTEX_UPSTREAM_TIMEOUT"})
-			logReq(reqID, http.StatusGatewayTimeout, duration)
+			logReq(c, http.StatusGatewayTimeout, duration, "", "")
 			return
 		}
 		c.JSON(http.StatusBadGateway, gin.H{"error": "vertex upstream error", "reason_code": "VERTEX_UPSTREAM_FAILURE"})
-		logReq(reqID, http.StatusBadGateway, duration)
+		logReq(c, http.StatusBadGateway, duration, "", "")
 		return
 	}
 	defer vertexResp.Body.Close()
@@ -395,20 +425,20 @@ func explainHandler(c *gin.Context) {
 	respBody, err := io.ReadAll(vertexResp.Body)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "vertex upstream error", "reason_code": "VERTEX_UPSTREAM_FAILURE"})
-		logReq(reqID, http.StatusBadGateway, duration)
+		logReq(c, http.StatusBadGateway, duration, "", "")
 		return
 	}
 
 	if vertexResp.StatusCode < 200 || vertexResp.StatusCode >= 300 {
 		c.Data(vertexResp.StatusCode, vertexResp.Header.Get("Content-Type"), respBody)
-		logReq(reqID, vertexResp.StatusCode, duration)
+		logReq(c, vertexResp.StatusCode, duration, "", "")
 		return
 	}
 
 	summary, err := extractVertexSummary(respBody)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "vertex upstream error", "reason_code": "VERTEX_INVALID_RESPONSE"})
-		logReq(reqID, http.StatusBadGateway, duration)
+		logReq(c, http.StatusBadGateway, duration, "", "")
 		return
 	}
 
@@ -417,33 +447,27 @@ func explainHandler(c *gin.Context) {
 		"model":   model,
 		"region":  region,
 	})
-	logReq(reqID, http.StatusOK, duration)
+	logReq(c, http.StatusOK, duration, "", "")
 }
 
 func main() {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
-	r.GET("/healthz", gin.WrapF(healthz))
-	r.HEAD("/healthz", gin.WrapF(healthz))
-	log.Println("gin: mounted /healthz on engine")
-	for _, ri := range r.Routes() {
-		if ri.Path == "/healthz" {
-			log.Printf("gin route %s %s", ri.Method, ri.Path)
-		}
-	}
+	r.Use(func(c *gin.Context) {
+		requestID(c)
+		c.Next()
+	})
 
 	mountDemo(r)
 	mountAPI(r)
-	mountOps(r)
 
-	r.GET("/readyz", func(c *gin.Context) {
-		c.String(200, "ready")
-	})
 	r.GET("/v1/ping", func(c *gin.Context) {
-		c.JSON(200, gin.H{"msg": "pong"})
+		c.JSON(http.StatusOK, gin.H{"msg": "pong", "run_id": runID})
 	})
 
-	// Cloud Run sets $PORT; fall back to 8080 for local runs
+	getRunID := func() string { return runID }
+	healthHandler := NewHealthHandler(getRunID)
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -451,22 +475,39 @@ func main() {
 	addr := ":" + port
 
 	mux := http.NewServeMux()
-	mux.Handle("/", r)
-	mux.HandleFunc("/healthz", healthz)
-	mux.HandleFunc("/healthz/", healthz)
-	mux.HandleFunc("/livez", healthz)
-	mux.HandleFunc("/livez/", healthz)
+	mux.Handle("/healthz", healthHandler)
+	mux.Handle("/livez", healthHandler)
+	mux.Handle("/readyz", healthHandler)
 	mux.Handle("/ops", OpsHandler())
-
-	finalHandler := withHealthz(mux)
-	log.Printf("mux: /livez mounted (alias of /healthz)")
-	log.Printf("server ready on %s; handler=%T (final mux with /healthz)", addr, finalHandler)
+	mux.Handle("/ops/", OpsHandler())
+	mux.Handle("/api/", OTSMiddleware(runID, r))
+	mux.Handle("/", r)
 
 	srv := &http.Server{
-		Addr:    addr,
-		Handler: finalHandler,
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 	}
 
+	shutdownCh := make(chan os.Signal, 1)
+	signal.Notify(shutdownCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(shutdownCh)
+
+	go func() {
+		sig := <-shutdownCh
+		log.Printf("server: received %s, initiating shutdown", sig)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Printf("server shutdown error: %v", err)
+		}
+	}()
+
+	log.Printf("server ready on %s; run_id=%s", addr, runID)
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("listen: %v", err)
 	}

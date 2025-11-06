@@ -1,24 +1,26 @@
 package main
 
 import (
-	"log"
+	"fmt"
 	"net/http"
 )
 
-// /healthz: simple liveness. GET/HEAD -> 200, others -> 405.
-func healthz(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-	case http.MethodHead:
-		w.WriteHeader(http.StatusOK)
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
-	}
-}
+// NewHealthHandler serves liveness/readiness probes with run_id information.
+func NewHealthHandler(getRunID func() string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.Header().Set("Allow", "GET, HEAD")
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
 
-func init() {
-	http.HandleFunc("/healthz", healthz)
-	log.Printf("mounted /healthz")
+		w.Header().Set("Cache-Control", "no-store, max-age=0")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+
+		if r.Method == http.MethodHead {
+			return
+		}
+		fmt.Fprintf(w, `{"ok":true,"run_id":"%s"}`, getRunID())
+	})
 }

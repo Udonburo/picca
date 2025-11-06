@@ -1,57 +1,67 @@
-#!/usr/bin/env python3
-import argparse, csv, json, os
+import argparse
+import json
+import math
+import os
+
 import matplotlib.pyplot as plt
 
-def read_jsonl(path):
-    rows=[]
-    with open(path,encoding="utf-8") as f:
-        for line in f:
-            if line.strip():
-                rows.append(json.loads(line))
-    return rows
 
-def percentile(values, p):
-    if not values: return None
+def load_rows(path):
+    with open(path, "r", encoding="utf-8") as fh:
+        return [json.loads(line) for line in fh if line.strip()]
+
+
+def percentile(values, q):
+    if not values:
+        return None
     xs = sorted(values)
-    k = max(0, min(len(xs)-1, int(len(xs)*p) - 1))
-    return xs[k]
+    idx = max(0, min(len(xs) - 1, int(math.ceil(q * len(xs)) - 1)))
+    return xs[idx]
+
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--infile", required=True)
-    ap.add_argument("--out-png", required=True)
-    ap.add_argument("--out-csv", default=None)
-    ap.add_argument("--cost-per-1k", type=float, default=0.0, help="¥ per 1k requests (liveness=0)")
-    args = ap.parse_args()
+    parser = argparse.ArgumentParser(description="Render Ops Fig.1 summary.")
+    parser.add_argument("--infile", required=True, help="Input JSONL from bench_picca.")
+    parser.add_argument("--out", required=True, help="Output PNG path.")
+    parser.add_argument("--window", default="N=50 @ ~3s", help="Window annotation.")
+    parser.add_argument(
+        "--concurrency", type=int, default=1, help="Concurrency annotation."
+    )
+    args = parser.parse_args()
 
-    rows = read_jsonl(args.infile)
-    lats = [r["latency_ms"] for r in rows if "latency_ms" in r]
-    ok = sum(1 for r in rows if r.get("status")==200)
-    n = len(rows)
-    succ = (ok/n*100.0) if n>0 else 0.0
-    p95 = percentile(lats, 0.95) if lats else 0.0
-    cost = args.cost_per_1k  # /livez は0でOK
+    rows = load_rows(args.infile)
+    successes = [r for r in rows if r.get("status") == 200]
+    success_pct = (len(successes) / len(rows) * 100.0) if rows else 0.0
+    p95_val = percentile([float(r.get("ms", 0.0)) for r in successes], 0.95)
+    p95_display = f"{p95_val:.1f} ms" if p95_val is not None else "--"
+    run_id = rows[0].get("run_id", "") if rows else ""
 
-    # CSV
-    out_csv = args.out_csv or os.path.splitext(args.out_png)[0] + ".csv"
-    os.makedirs(os.path.dirname(out_csv) or ".", exist_ok=True)
-    with open(out_csv,"w",newline="",encoding="utf-8") as f:
-        w=csv.writer(f); w.writerow(["metric","value"])
-        w.writerow(["p95_ms", f"{p95:.1f}"])
-        w.writerow(["success_percent", f"{succ:.1f}"])
-        w.writerow(["cost_per_1k_yen", f"{cost:.2f}"])
+    fig = plt.figure(figsize=(6, 3.5))
+    ax = fig.add_subplot(111)
+    ax.axis("off")
+    messages = [
+        f"p95 Latency: {p95_display}",
+        f"Success Rate: {success_pct:.1f}%",
+        f"Samples: {len(rows)}",
+        f"Run ID: {run_id}",
+        f"Window: {args.window} · c={args.concurrency}",
+    ]
+    for i, text in enumerate(messages):
+        ax.text(
+            0.05,
+            0.85 - i * 0.18,
+            text,
+            fontsize=16 if i < 3 else 13,
+            ha="left",
+            va="top",
+        )
+    ax.set_title("Fig.1 - Ops Slice", fontsize=16, loc="left")
 
-    # PNG（3本の水平バー）
-    fig = plt.figure(figsize=(6,3.2))
-    labels = ["p95 (ms)","Success (%)","Cost/1k (¥)"]
-    vals = [p95, succ, cost]
-    plt.barh(range(len(vals)), vals)
-    plt.yticks(range(len(vals)), labels)
-    plt.xlabel("value")
-    plt.tight_layout()
-    os.makedirs(os.path.dirname(args.out_png) or ".", exist_ok=True)
-    plt.savefig(args.out_png, dpi=160)
-    print(f"Wrote {args.out_png} and {out_csv}")
+    os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
+    fig.tight_layout()
+    fig.savefig(args.out, dpi=160)
+    plt.close(fig)
+
 
 if __name__ == "__main__":
     main()

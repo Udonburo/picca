@@ -1,12 +1,16 @@
-﻿service: picca
+service: picca
 owner: Aoi
-indicators:
-  - name: latency_p95_ms
-    objective: <= 800
-  - name: success_rate
-    objective: >= 0.985
-  - name: cost_per_1k_yen
-    objective: <= 2.5
+metrics:
+  p95_ms:
+    target: 500
+    window: "rolling 15m"
+  success:
+    target: 0.990
+    window: "rolling 15m"
+  cost_per_1k_yen:
+    target: null
+    window: "1d"
+    note: "See docs/runbook.md for interim cost formula."
 notes: >
-  Ops Slice for KAGAMI — Project LACHESIS (v0.3.9 Greenlight).
+  Ops Slice for KAGAMI - Project LACHESIS (v0.3.9 Greenlight).
   Runbook: ops/lachesis/runbook.md

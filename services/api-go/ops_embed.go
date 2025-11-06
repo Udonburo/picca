@@ -1,17 +1,17 @@
-// services/api-go/ops_embed.go
 package main
 
 import (
 	_ "embed"
-
-	"github.com/gin-gonic/gin"
+	"net/http"
 )
 
 //go:embed ops.html
 var opsHTML []byte
 
-func mountOps(r *gin.Engine) {
-	r.GET("/ops", func(c *gin.Context) {
-		c.Data(200, "text/html; charset=utf-8", opsHTML)
+// OpsHandler serves the embedded ops.html over net/http.
+func OpsHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write(opsHTML)
 	})
 }
