@@ -51,6 +51,17 @@ func deriveRunID() string {
 	return fmt.Sprintf("%s·%s", script, ckpt)
 }
 
+func withHealthz(next http.Handler, h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/healthz", "/healthz/", "/livez", "/livez/", "/readyz", "/readyz/":
+			h.ServeHTTP(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func apiKeyMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		requestID(c)
@@ -476,8 +487,11 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.Handle("/healthz", healthHandler)
+	mux.Handle("/healthz/", healthHandler)
 	mux.Handle("/livez", healthHandler)
+	mux.Handle("/livez/", healthHandler)
 	mux.Handle("/readyz", healthHandler)
+	mux.Handle("/readyz/", healthHandler)
 	mux.Handle("/ops", OpsHandler())
 	mux.Handle("/ops/", OpsHandler())
 	mux.Handle("/api/", OTSMiddleware(runID, r))
@@ -485,7 +499,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           mux,
+		Handler:           withHealthz(mux, healthHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      30 * time.Second,
