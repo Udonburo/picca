@@ -98,4 +98,3 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITLEAKS_ENABLE_COMMENTS: "false"
-          GITLEAKS_CONFIG: .gitleaks.toml
