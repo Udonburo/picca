@@ -1,6 +1,11 @@
 # Infrastructure
 
-This directory contains Terraform configuration for the picca project.
+> **Archived:** these files document the infrastructure explored during the
+> prototype. They are not connected to an active deployment pipeline and are
+> not maintained as a ready-to-apply production stack.
+
+This directory contains the Terraform and Cloud Build configuration used while
+exploring the Picca deployment architecture.
 
 ## Model Storage Bucket
 
@@ -13,11 +18,14 @@ Access to objects is granted to the service account
 `ml-py-stg-sa@<project>.iam.gserviceaccount.com` with the
 `roles/storage.objectViewer` role.
 
-## Quick start
+## Read-only validation
+
+The configuration can be inspected without creating cloud resources:
 
 ```bash
-terraform init
-terraform plan
-terraform apply
-terraform destroy
+cd infra
+terraform init -backend=false
+terraform validate
 ```
+
+No automated GCP deployment workflow is retained in this repository.

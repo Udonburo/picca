@@ -304,11 +304,11 @@ export default function Home() {
             Pythonの推論サービスが前処理とスコアリングを担当する構成です。
           </p>
           <a
-            href="https://github.com/Udonburo/picca/blob/main/docs/public/01_Tech_Architecture.pdf"
+            href="https://github.com/Udonburo/picca/blob/main/docs/PROJECT_BRIEF.md"
             target="_blank"
             rel="noreferrer"
           >
-            技術資料を見る
+            Project briefを見る
             <ArrowIcon />
           </a>
         </div>

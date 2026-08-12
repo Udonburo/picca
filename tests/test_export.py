@@ -1,5 +1,7 @@
 import subprocess
+import sys
 from pathlib import Path
+
 import onnx
 
 
@@ -19,6 +21,9 @@ def test_export_and_hash(tmp_path: Path):
     model = onnx.load(out)
     onnx.checker.check_model(model)
 
-    subprocess.run(["bash", "scripts/hash_model.sh", str(out)], check=True)
+    subprocess.run(
+        [sys.executable, "scripts/hash_model.py", str(out)],
+        check=True,
+    )
     sha = Path(str(out) + ".sha256")
     assert sha.exists()

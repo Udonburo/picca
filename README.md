@@ -2,9 +2,17 @@
   <img src="./docs/assets/picca-cover.svg" alt="Picca - motion scoring technical learning log" width="100%" />
 </p>
 
+<h1 align="center">Picca</h1>
+
 <p align="center">
-  <strong>Archived build log · 2025</strong><br />
-  15秒のモーションを、ひとつのスコアへ。
+  <strong>End-to-end motion scoring PoC · Technical learning log</strong><br />
+  <sub>Archived in 2025 · 15秒のモーションを、ひとつのスコアへ。</sub>
+</p>
+
+<p align="center">
+  <a href="https://github.com/Udonburo/picca/actions/workflows/ci.yml"><img src="https://github.com/Udonburo/picca/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status" /></a>
+  <a href="https://github.com/Udonburo/picca/actions/workflows/go-gateway.yml"><img src="https://github.com/Udonburo/picca/actions/workflows/go-gateway.yml/badge.svg?branch=main" alt="Go gateway status" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-087864" alt="Apache-2.0 license" /></a>
 </p>
 
 <p align="center">
@@ -17,7 +25,9 @@
 </p>
 
 > [!NOTE]
-> Piccaは開発を終了した短期プロトタイプです。完成品として見せるのではなく、Web・API・ML・クラウド運用を横断して得た設計判断と学びを残す技術ログとして整理しています。
+> Piccaは開発を終了した短期プロトタイプです。ホスト済みのデモとクラウド環境は現在稼働していません。完成品として見せるのではなく、Web・API・ML・クラウド運用を横断して得た設計判断と学びを残す技術ログとして整理しています。
+
+**Quick read:** [Project Brief (EN)](docs/PROJECT_BRIEF.md) · [Technical Retrospective (JP)](docs/RETROSPECTIVE.md)
 
 ## この記録について
 
@@ -32,11 +42,11 @@ Piccaは、短いモーションから得た身体のキーポイント列を解
 
 詳しい振り返りは [Technical Retrospective](docs/RETROSPECTIVE.md) にまとめています。
 
-## 触った技術領域
+## 実装・検証した領域
 
 | Area | What I explored | Stack |
 | --- | --- | --- |
-| Web experience | モーション計測から結果表示までの画面設計とAPI接続 | Next.js, React, TypeScript |
+| Web experience | 技術ログ画面、静的な結果モック、推論API routeの境界 | Next.js, React, TypeScript |
 | API gateway | API key認証、request ID、タイムアウト、ヘルスチェック、graceful shutdown | Go, Gin |
 | ML serving | キーポイントの前処理、ONNXモデルの読み込み・ハッシュ検証・推論API | Python, FastAPI, ONNX Runtime |
 | Cloud / delivery | コンテナ分割、Cloud Run構成、モデル保管、CI/CD、IaC | Docker, GCP, Cloud Build, Terraform |
@@ -93,6 +103,17 @@ npm run dev
 
 ブラウザで [http://localhost:3000](http://localhost:3000) を開いてください。トップページは記録を読むための静的な画面です。
 
+## Quality checks
+
+公開コードは、GitHub Actions上で次の境界を継続的に確認します。停止済みのGCP環境へのデプロイ処理は含みません。
+
+| Area | Checks |
+| --- | --- |
+| Web | ESLint, Jest, Next.js production build |
+| Python / ML | Ruff, pytest, ONNX export and inference smoke tests |
+| Go gateway | `go vet`, `go test -race` |
+| Repository | Gitleaks and workflow naming rules |
+
 ## Repository map
 
 ```text
@@ -104,14 +125,18 @@ picca/
 ├─ ops/lachesis/       # SLO and runbook
 ├─ tests/              # Model export and prediction tests
 ├─ tools/              # Benchmarking and plotting utilities
-└─ docs/               # Retrospective, public extracts, and original notes
+└─ docs/               # Brief, retrospective, and historical materials
 ```
 
-## Reference documents
+## Historical materials
 
-以下はプロトタイプ制作時点の資料です。将来計画や当時の目標値を含むため、現在の実装を説明するREADME・振り返りとは役割を分けています。
+現在の到達点と学びは [Technical Retrospective](docs/RETROSPECTIVE.md) に記録しています。
 
-- [Technical Retrospective](docs/RETROSPECTIVE.md)
+<details>
+<summary>ハッカソン提出時点の資料を見る</summary>
+
+以下は制作当時の資料で、将来計画や当時の目標値も含みます。現在の実装を示す証拠ではなく、意思決定の背景を残すための履歴です。
+
 - [Tech Architecture](docs/public/01_Tech_Architecture.pdf)
 - [Original README (JP / EN)](docs/public/02_Readme.pdf)
 - [Product Overview](docs/public/03_Product_Overview.pdf)
@@ -119,6 +144,12 @@ picca/
 - [Contributing Guide](docs/public/05_Contributing.pdf)
 - [Code of Conduct](docs/public/Code_Of_Conduct.pdf)
 - [License](docs/public/License.pdf)
+
+</details>
+
+## License
+
+Source code is available under the [Apache License 2.0](LICENSE).
 
 ---
 

@@ -3,17 +3,29 @@ import json
 import logging
 import os
 import time
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, Request, Response
 
-from .model import get_session, predict as _predict
+from .model import get_session
+from .model import predict as _predict
 from .schemas import KeypointsInput, ScoreOutput
 
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 RUN_ID = f"{os.getenv('PICCA_SCRIPT_SHA', 'dev')}·{os.getenv('MODEL_CKPT_SHA', 'na')}"
 MAX_CAPTURE_BYTES = 1 << 20  # 1 MiB
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    get_session()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 def sha16(data: bytes) -> str:
@@ -41,13 +53,10 @@ async def ots_middleware(request: Request, call_next):
 
     req_id = response.headers.get("x-request-id") or request.headers.get("x-request-id") or ""
     out_hash = ""
-    try:
-        if getattr(response, "body_iterator", None) is None:
-            payload = getattr(response, "body", b"") or b""
-            if isinstance(payload, (bytes, bytearray)):
-                out_hash = hash_or_blank(bytes(payload))
-    except Exception:
-        out_hash = ""
+    if getattr(response, "body_iterator", None) is None:
+        response_body = getattr(response, "body", b"") or b""
+        if isinstance(response_body, (bytes, bytearray)):
+            out_hash = hash_or_blank(bytes(response_body))
 
     print(
         json.dumps(
@@ -66,11 +75,6 @@ async def ots_middleware(request: Request, call_next):
     return response
 
 
-@app.on_event("startup")
-def preload_model():
-    _ = get_session()
-
-
 @app.post("/predict", response_model=ScoreOutput)
 async def predict_endpoint(payload: KeypointsInput, request: Request) -> ScoreOutput:
     start = time.perf_counter()
@@ -79,7 +83,7 @@ async def predict_endpoint(payload: KeypointsInput, request: Request) -> ScoreOu
     infer_ms = round((time.perf_counter() - start) * 1000, 3)
     req_id = request.headers.get("x-request-id", "")
     model_uri = os.environ.get("_MODEL_URI", "")
-    logging.info(
+    logger.info(
         json.dumps(
             {
                 "service": "ml-py",
@@ -108,5 +112,5 @@ def readiness():
     try:
         _ = get_session()
         return {"ready": True, "run_id": RUN_ID}
-    except Exception:
-        raise HTTPException(status_code=503, detail="not_ready")
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail="not_ready") from exc

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import List, Optional
-
 from pydantic import BaseModel
 
 
@@ -11,7 +9,7 @@ class XY(BaseModel):
 
 
 class KeypointsInput(BaseModel):
-    keypoints: List[XY]
+    keypoints: list[XY]
     fps: int
 
 
@@ -20,5 +18,5 @@ class ScoreOutput(BaseModel):
     symmetry: float
     power: float
     consistency: float
-    analysis: Optional[dict] = None
+    analysis: dict | None = None
 

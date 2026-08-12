@@ -20,24 +20,25 @@ def request_json(url: str, timeout: float):
                 except json.JSONDecodeError:
                     payload = None
             return resp.getcode(), ms, payload
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
         ms = (time.perf_counter() - start) * 1000.0
         print(f"[bench] {exc}", file=sys.stderr)
         return 0, ms, None
 
 
 def write_jsonl(path: str, rows):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    output_dir = os.path.dirname(path)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
-        for row in rows:
-            fh.write(json.dumps(row) + "\n")
+        fh.writelines(f"{json.dumps(row)}\n" for row in rows)
 
 
 def percentile(values, q):
     if not values:
         return None
     xs = sorted(values)
-    idx = max(0, min(len(xs) - 1, int(round((len(xs) - 1) * q))))
+    idx = max(0, min(len(xs) - 1, round((len(xs) - 1) * q)))
     return xs[idx]
 
 

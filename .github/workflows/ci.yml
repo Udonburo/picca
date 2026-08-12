@@ -2,8 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, feat/**, fix/** ]
+    branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -14,7 +15,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  web:
+    name: Web · lint, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test -- --runInBand
+
+      - name: Build
+        run: npm run build
+
+  python:
+    name: Python · lint, test
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -41,19 +67,13 @@ jobs:
             requirements-dev.txt
             services/ml_py/requirements.txt
 
-      - name: Install base dev deps (fast + lean)
+      - name: Install Python dependencies
         run: |
           python -m pip install -U pip wheel setuptools
-          pip install ruff pytest "httpx<0.28" onnx
+          pip install -r requirements-dev.txt
 
       - name: Ruff
         run: ruff check .
-
-      - name: Install ml_py deps
-        run: pip install -r services/ml_py/requirements.txt
-
-      - name: Install torch (CPU)
-        run: pip install torch
 
       - name: Pytest (JUnit)
         run: pytest -q -ra --junitxml=pytest.xml

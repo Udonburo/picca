@@ -7,23 +7,16 @@ This document explains how to export an ONNX model and generate a SHA-256 hash.
 python scripts/export_onnx.py --ckpt checkpoints/model.pt --out model.onnx
 
 # 2. ハッシュ生成
-bash scripts/hash_model.sh model.onnx
-
-# 3. GCS へアップロード
-gsutil cp model.onnx* gs://picca-models/models/dcv/v0.1.0/
+python scripts/hash_model.py model.onnx
 ```
 
-To preview infrastructure changes before deploying:
+The former GCS upload and GitHub Actions export workflow were removed when the
+hosted GCP environment was retired. The infrastructure files remain only as
+historical implementation evidence; see [`infra/README.md`](../infra/README.md)
+for read-only validation.
 
-```bash
-terraform plan -var="project=<your-gcp-project>" -out=tfplan
-```
-
-To trigger the workflow via CLI:
-
-```bash
-gh workflow run ML\ Export --field ckpt_path=checkpoints/model.pt --field tag=v0.1.0
-```
+The shell wrapper `bash scripts/hash_model.sh model.onnx` remains available for
+POSIX environments and delegates to the same Python implementation.
 
 ## Predict API
 

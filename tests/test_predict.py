@@ -1,14 +1,14 @@
 import hashlib
-from pathlib import Path
 import sys
+from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
 import onnx
+import pytest
 from fastapi.testclient import TestClient
 from onnx import TensorProto, helper, numpy_helper
-import pytest
 
 
 def _make_const_model(path: Path) -> None:
@@ -36,8 +36,8 @@ def test_predict(tmp_path, monkeypatch):
     monkeypatch.setenv("_MODEL_URI", str(model_path))
     monkeypatch.setenv("_MODEL_SHA256", sha)
 
-    from services.ml_py.model import get_session
     from services.ml_py.main import app
+    from services.ml_py.model import get_session
 
     get_session.cache_clear()
     client = TestClient(app)

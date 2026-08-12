@@ -1,34 +1,6 @@
-# umm
-infra/terraform-sa.json
-infra/*.tf.json
-infra/*.json
-*.json
-!package-lock.json
-!package.json
-!app/package.json
-gcp-sa-key.json
-gcp-sa-key.b64
-
-
-# ─ Terraform ─
-.terraform/
-infra/.terraform/
-infra/.terraform.lock.hcl
-infra/terraform.tfstate*
-*.tfstate
-*.tfstate.backup
-
-
+# Dependencies
 node_modules/
-dist/
-.next/            # Next.js build output
-
-
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/.pnp
+.pnp
 .pnp.*
 .yarn/*
 !.yarn/patches
@@ -36,67 +8,71 @@ dist/
 !.yarn/releases
 !.yarn/versions
 
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-__pycache__/
-*.pyc
-.DS_Store
-.idea/
-.vscode/
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# env files (can opt-in for committing if needed)
-.env.local
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
+# Web build and test output
+.next/
+.playwright-mcp/
+out/
+build/
+dist/
+coverage/
 next-env.d.ts
+*.tsbuildinfo
 
-# local test artifacts
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Local environment and credentials
+.env*
+!.env.local.example
+*.pem
+api_key.txt
+gcp-sa-key.json
+gcp-sa-key.b64
+infra/terraform-sa.json
+
+# Terraform local state
+.terraform/
+**/.terraform/
+.terraform.lock.hcl
+infra/.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+*.tfplan
+*.tfvars
+**/crash.log
+infra/*.tf.json
+infra/*.json
+infra/backend.hcl
+infra/tfplan
+
+# Local ML and benchmark artifacts
 dummy.pt
-model.onnx
+*.onnx
+*.onnx.sha256
+/ops/lachesis/ots.json
+req.json
 
-# Go build outputs
+# Go build output
 *.exe
 *.dll
 *.so
 *.dylib
 *.test
 
+# Editors, operating systems, and logs
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
 
-# ML artifacts
-*.onnx
-*.onnx.sha256
-
-
-# Terraform local files
-**/.terraform/
-**/*.tfstate
-**/*.tfstate.*
-**/crash.log
-**/tfplan
-**/*.tfplan
-**/*.tfvars
-infra/tfplan
-infra/backend.hcl
-api_key.txt
-req.json
+# Hosting metadata
+.vercel/
