@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">Picca motion scoring build log</title>
+  <desc id="desc">A dark green technical learning log cover with a motion trace, sample score, and project technologies.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#101c1a"/>
+      <stop offset="1" stop-color="#1a302b"/>
+    </linearGradient>
+    <linearGradient id="mint" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#28bfa2"/>
+      <stop offset="1" stop-color="#7ce5d1"/>
+    </linearGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="70"/>
+    </filter>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#07110f" flood-opacity=".38"/>
+    </filter>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#9cd8ca" stroke-opacity=".07"/>
+    </pattern>
+    <clipPath id="frame">
+      <rect width="1200" height="630" rx="30"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#frame)">
+  <rect width="1200" height="630" rx="30" fill="url(#bg)"/>
+  <circle cx="890" cy="105" r="220" fill="#36d2b4" opacity=".12" filter="url(#blur)"/>
+  <circle cx="1120" cy="560" r="170" fill="#36d2b4" opacity=".08" filter="url(#blur)"/>
+  <path d="M58 70H1142" stroke="#fff" stroke-opacity=".1"/>
+
+  <g transform="translate(62 35)">
+    <circle cx="17" cy="17" r="17" fill="#eef4ed"/>
+    <g fill="#087864" transform="rotate(-10 17 17)">
+      <rect x="10" y="13" width="3" height="9" rx="1.5"/>
+      <rect x="16" y="8" width="3" height="19" rx="1.5"/>
+      <rect x="22" y="11" width="3" height="13" rx="1.5"/>
+    </g>
+    <text x="48" y="23" fill="#f5f4ed" font-family="Segoe UI, Arial, sans-serif" font-size="23" font-weight="700" letter-spacing="-1">picca</text>
+  </g>
+
+  <g transform="translate(62 153)">
+    <rect width="191" height="29" rx="14.5" fill="#39d3b5" fill-opacity=".12" stroke="#39d3b5" stroke-opacity=".32"/>
+    <circle cx="15" cy="14.5" r="3.5" fill="#39d3b5"/>
+    <text x="27" y="19" fill="#77dfcb" font-family="Consolas, monospace" font-size="10" font-weight="700" letter-spacing="1.3">ARCHIVED BUILD LOG</text>
+  </g>
+
+  <text x="62" y="242" fill="#f4f1e9" font-family="Segoe UI, Yu Gothic, sans-serif" font-size="72" font-weight="750" letter-spacing="-4">Motion, measured.</text>
+  <text x="62" y="302" fill="#79dfcc" font-family="Segoe UI, Yu Gothic, sans-serif" font-size="43" font-weight="650" letter-spacing="-2">15 seconds into one score.</text>
+  <text x="65" y="355" fill="#dce4e0" fill-opacity=".58" font-family="Segoe UI, Yu Gothic, sans-serif" font-size="16">A motion-scoring PoC documented as a technical learning archive.</text>
+
+  <g transform="translate(64 468)">
+    <text y="0" fill="#fff" fill-opacity=".36" font-family="Consolas, monospace" font-size="10" font-weight="700" letter-spacing="1.8">BUILT WITH</text>
+    <text y="38" fill="#f4f1e9" fill-opacity=".86" font-family="Consolas, monospace" font-size="13" letter-spacing="1.2">NEXT.JS  ·  GO  ·  FASTAPI  ·  ONNX  ·  TERRAFORM</text>
+  </g>
+
+  <g transform="translate(737 112)" filter="url(#shadow)">
+    <rect width="400" height="405" rx="25" fill="#f8f7f1"/>
+    <text x="27" y="36" fill="#087864" font-family="Consolas, monospace" font-size="8" font-weight="700" letter-spacing="1.3">STATIC PREVIEW</text>
+    <text x="27" y="62" fill="#17211f" font-family="Segoe UI, Arial, sans-serif" font-size="19" font-weight="700">Motion analysis</text>
+    <g transform="translate(305 25)">
+      <rect width="68" height="26" rx="13" fill="#eef0eb" stroke="#d9ddd7"/>
+      <circle cx="14" cy="13" r="3" fill="#9aa29f"/>
+      <text x="24" y="16.5" fill="#6a7471" font-family="Consolas, monospace" font-size="7" font-weight="700">OFFLINE</text>
+    </g>
+
+    <rect x="27" y="85" width="346" height="155" fill="url(#grid)"/>
+    <path d="M35 215C74 204 95 156 136 169s50 37 92 17 52-66 137-78" fill="none" stroke="#39d3b5" stroke-opacity=".16" stroke-width="13" stroke-linecap="round"/>
+    <path d="M35 215C74 204 95 156 136 169s50 37 92 17 52-66 137-78" fill="none" stroke="url(#mint)" stroke-width="2.5" stroke-linecap="round"/>
+    <g fill="#087864" stroke="#39d3b5" stroke-opacity=".45" stroke-width="6">
+      <circle cx="35" cy="215" r="4"/><circle cx="92" cy="178" r="4"/><circle cx="136" cy="169" r="4"/>
+      <circle cx="188" cy="190" r="4"/><circle cx="228" cy="186" r="4"/><circle cx="288" cy="136" r="4"/><circle cx="365" cy="108" r="4"/>
+    </g>
+    <path d="M27 252H373" stroke="#17211f" stroke-opacity=".12"/>
+
+    <text x="27" y="282" fill="#67716e" font-family="Segoe UI, Arial, sans-serif" font-size="9" font-weight="600">SAMPLE SCORE</text>
+    <text x="27" y="341" fill="#17211f" font-family="Segoe UI, Arial, sans-serif" font-size="53" font-weight="750" letter-spacing="-3">84</text>
+    <text x="89" y="340" fill="#87908d" font-family="Segoe UI, Arial, sans-serif" font-size="11">/100</text>
+
+    <g transform="translate(158 280)" font-family="Segoe UI, Arial, sans-serif">
+      <text x="0" y="0" fill="#67716e" font-size="8">Symmetry</text><text x="207" y="0" fill="#17211f" font-size="8" text-anchor="end">91</text>
+      <rect x="0" y="9" width="207" height="5" rx="2.5" fill="#e1e4dd"/><rect x="0" y="9" width="188" height="5" rx="2.5" fill="url(#mint)"/>
+      <text x="0" y="41" fill="#67716e" font-size="8">Power</text><text x="207" y="41" fill="#17211f" font-size="8" text-anchor="end">78</text>
+      <rect x="0" y="50" width="207" height="5" rx="2.5" fill="#e1e4dd"/><rect x="0" y="50" width="161" height="5" rx="2.5" fill="url(#mint)"/>
+      <text x="0" y="82" fill="#67716e" font-size="8">Consistency</text><text x="207" y="82" fill="#17211f" font-size="8" text-anchor="end">86</text>
+      <rect x="0" y="91" width="207" height="5" rx="2.5" fill="#e1e4dd"/><rect x="0" y="91" width="178" height="5" rx="2.5" fill="url(#mint)"/>
+    </g>
+  </g>
+
+  <text x="1138" y="592" fill="#fff" fill-opacity=".35" font-family="Consolas, monospace" font-size="9" text-anchor="end" letter-spacing="1.2">TECHNICAL LEARNING LOG · 2025</text>
+  </g>
+</svg>
