@@ -20,6 +20,7 @@ output  = score + symmetry + power + consistency
 | Web | Next.js / React / TypeScript | 入力から結果までの体験、API境界 |
 | Gateway | Go / Gin | 認証、timeout、request ID、graceful shutdown |
 | Inference | FastAPI / ONNX Runtime | 前処理、モデル配布、入出力schema |
+| Explanation | Vertex AI / Gemini | 数値評価と自然言語フィードバックの分離 |
 | Infrastructure | Docker / Cloud Run / Terraform | service account、artifact、IaC、CI/CD |
 | Operations | health / readiness / JSONL / SLO | 観測可能性、再現性、障害時の確認手順 |
 
@@ -56,6 +57,22 @@ output  = score + symmetry + power + consistency
 **今なら**
 
 モデルversion、hash、input schema、preprocessing versionを一つのmanifestにします。固定fixtureを使い、export後のONNXからAPI responseまでをCIで一度通します。
+
+### 数値評価と生成的な説明を分ける
+
+**狙い**
+
+- `/api/v1/score` の採点をFastAPI / ONNX Runtimeへ閉じる
+- `/api/v1/explain` は `score`・`symmetry`・`power`・`consistency` だけを受け取る
+- 説明モデルやpromptの変更を、数値評価の定義から切り離す
+
+**実際に分かったこと**
+
+生成モデルは自然な言い換えには向きますが、採点まで担わせると、モデル更新やprompt変更が評価値の再現性に影響します。Piccaでは固定artifactから数値を返す経路と、その結果をVertex AI / Geminiで説明する経路をAPI単位で分けました。Geminiにraw keypointsは渡さず、説明が利用できない場合も数値結果は独立して扱えます。
+
+**今なら**
+
+score schema、model hash、prompt version、生成モデルIDを一つの観測単位として記録します。説明側には入力範囲の検証とtimeoutに加え、定型文へ戻せるfallbackを用意します。
 
 ### キーポイントだけを入力にする
 
@@ -110,14 +127,18 @@ flowchart LR
     Browser["Web client"] --> App["Web + API boundary"]
     App --> Inference["Python inference"]
     Inference --> Model["Versioned model manifest"]
+    Inference --> Metrics["Versioned numeric result"]
+    Metrics -.-> Explain["Optional explanation adapter"]
+    Explain -.-> Provider["Generative model"]
 ```
 
 1. 代表的なキーポイントfixtureと期待responseを最初に決める
 2. Python内で前処理からONNX推論までを通す
 3. 一つのAPI境界を追加し、schemaとtimeoutを固定する
 4. Webから同じfixtureを送り、end-to-end testを作る
-5. request ID、health、構造化ログを最小構成で入れる
-6. 必要になった境界だけを独立サービスへ分ける
+5. 数値結果が単独で成立してから、任意の説明レイヤを追加する
+6. request ID、health、構造化ログを最小構成で入れる
+7. 必要になった境界だけを独立サービスへ分ける
 
 構成を小さくするのは、学ぶ範囲を狭めるためではありません。何を検証しているかを一度に一つずつ説明できるようにするためです。
 
@@ -133,4 +154,4 @@ flowchart LR
 
 ---
 
-この記録の結論は「多くの技術を使った」ことではなく、**境界を増やす理由、結果を再現する条件、動作を説明するための観測**を具体的に学べたことです。
+この記録の結論は「多くの技術を使った」ことではなく、**境界を増やす理由、評価と説明を分ける意味、結果を再現する条件、動作を説明するための観測**を具体的に学べたことです。

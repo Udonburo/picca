@@ -719,6 +719,11 @@ a {
   background: rgba(57, 211, 181, 0.07);
 }
 
+.flow-node-generative {
+  border-color: rgba(121, 223, 204, 0.24);
+  background: linear-gradient(135deg, rgba(57, 211, 181, 0.06), rgba(255, 255, 255, 0.025));
+}
+
 .flow-node-top {
   margin-bottom: 16px;
   display: flex;
@@ -790,6 +795,11 @@ a {
   transform: rotate(45deg);
 }
 
+.flow-connector-secondary::before {
+  background: transparent;
+  border-left: 1px dashed rgba(121, 223, 204, 0.46);
+}
+
 .flow-output {
   margin-top: 17px;
   padding: 13px 15px;
@@ -807,6 +817,16 @@ a {
   font-size: 7px;
   font-weight: 800;
   letter-spacing: 0.12em;
+}
+
+.flow-output-secondary {
+  border: 1px solid rgba(121, 223, 204, 0.28);
+  background: rgba(121, 223, 204, 0.07);
+  color: #fff;
+}
+
+.flow-output-secondary span {
+  color: var(--mint);
 }
 
 .flow-output strong {

@@ -10,14 +10,14 @@ const capabilities = [
     number: "02",
     title: "API gateway",
     description:
-      "認証、タイムアウト、request ID、ヘルスチェックを Go の境界に集約。",
+      "score と explain を別経路にし、認証、timeout、request IDを Go に集約。",
     tags: ["Go", "Gin", "REST API"],
   },
   {
     number: "03",
     title: "ML serving",
     description:
-      "キーポイント列を前処理し、ONNX Runtime でスコアと3つの指標へ変換。",
+      "SHA-256で照合したONNX artifactから、スコアと3つの指標を数値推論。",
     tags: ["Python", "FastAPI", "ONNX"],
   },
   {
@@ -298,10 +298,11 @@ export default function Home() {
       <section className="section architecture" id="architecture">
         <div className="architecture-copy">
           <span className="section-index section-index-light">02 / ARCHITECTURE</span>
-          <h2>入力からスコアまでを、<br />責務ごとに分ける。</h2>
+          <h2>数値評価と、<br />言葉での説明を分ける。</h2>
           <p>
-            ブラウザから送るのはポーズの座標列。Goがリクエストを受け、
-            Pythonの推論サービスが前処理とスコアリングを担当する構成です。
+            score経路ではFastAPI / ONNXが4つの数値を返し、任意のexplain経路では
+            その結果だけをVertex AI / Geminiへ渡します。生成モデルに採点を任せず、
+            artifactを照合する数値評価と柔軟な説明を切り離した構成です。
           </p>
           <a
             href="https://github.com/Udonburo/picca/blob/main/docs/PROJECT_BRIEF.md"
@@ -322,7 +323,7 @@ export default function Home() {
             <strong>Web client</strong>
             <small>Next.js · TypeScript</small>
           </div>
-          <div className="flow-connector"><span>HTTPS / JSON</span><i /></div>
+          <div className="flow-connector"><span>POST /api/v1/score</span><i /></div>
           <div className="flow-node">
             <div className="flow-node-top">
               <span>02</span>
@@ -331,18 +332,33 @@ export default function Home() {
             <strong>Go gateway</strong>
             <small>Auth · routing · ops</small>
           </div>
-          <div className="flow-connector"><span>Keypoint vector</span><i /></div>
+          <div className="flow-connector"><span>Keypoints / JSON</span><i /></div>
           <div className="flow-node">
             <div className="flow-node-top">
               <span>03</span>
               <span className="flow-symbol">◫</span>
             </div>
             <strong>ML service</strong>
-            <small>FastAPI · ONNX Runtime</small>
+            <small>FastAPI · ONNX · SHA-256</small>
           </div>
           <div className="flow-output">
-            <span>OUTPUT</span>
+            <span>NUMERIC OUTPUT</span>
             <strong>Score · Symmetry · Power · Consistency</strong>
+          </div>
+          <div className="flow-connector flow-connector-secondary">
+            <span>POST /api/v1/explain · 4 metrics only</span><i />
+          </div>
+          <div className="flow-node flow-node-generative">
+            <div className="flow-node-top">
+              <span>04</span>
+              <span className="flow-symbol">✦</span>
+            </div>
+            <strong>Explain route</strong>
+            <small>Go → Vertex AI · Gemini 2.5 Flash-Lite</small>
+          </div>
+          <div className="flow-output flow-output-secondary">
+            <span>OPTIONAL OUTPUT</span>
+            <strong>Natural-language feedback</strong>
           </div>
         </div>
       </section>

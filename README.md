@@ -33,6 +33,9 @@
 
 Piccaは、短いモーションから得た身体のキーポイント列を解析し、0-100のスコアと `Symmetry`・`Power`・`Consistency` の3指標へ変換する技術検証です。
 
+> [!IMPORTANT]
+> **設計の核は、数値評価と生成的な説明を別レイヤとして実装したことです。** `POST /api/v1/score` はFastAPI / ONNX Runtimeへ数値推論を委譲し、設定されたSHA-256とモデルartifactを照合して4指標を返します。別経路の `POST /api/v1/explain` は、その4指標だけをVertex AI / Gemini（既定: `gemini-2.5-flash-lite`）へ渡して自然言語の説明を生成します。生成モデルに採点を担わせず、artifactを照合する数値評価と表現の柔軟性を切り離しました。
+
 もともとはハッカソン向けに短期間で作ったPoCでした。現在のリポジトリは、次の4点を後から読み返せる形で保存することを目的にしています。
 
 - 実際にどこまで作ったか
@@ -47,8 +50,9 @@ Piccaは、短いモーションから得た身体のキーポイント列を解
 | Area | What I explored | Stack |
 | --- | --- | --- |
 | Web experience | 技術ログ画面、静的な結果モック、推論API routeの境界 | Next.js, React, TypeScript |
-| API gateway | API key認証、request ID、タイムアウト、ヘルスチェック、graceful shutdown | Go, Gin |
-| ML serving | キーポイントの前処理、ONNXモデルの読み込み・ハッシュ検証・推論API | Python, FastAPI, ONNX Runtime |
+| API gateway | score / explainの経路分離、API key認証、request ID、タイムアウト、graceful shutdown | Go, Gin |
+| ML serving | キーポイントの前処理、ONNXモデルのSHA-256照合・数値推論 | Python, FastAPI, ONNX Runtime |
+| Generative explanation | 4つの推論結果だけを入力にした自然言語フィードバック | Vertex AI, Gemini |
 | Cloud / delivery | コンテナ分割、Cloud Run構成、モデル保管、CI/CD、IaC | Docker, GCP, Cloud Build, Terraform |
 | Operations | SLO、runbook、構造化ログ、ベンチマークと可視化 | pytest, Go test, JSONL, Matplotlib |
 
@@ -56,22 +60,24 @@ Piccaは、短いモーションから得た身体のキーポイント列を解
 
 ```mermaid
 flowchart LR
-    Web["Web client<br/>Next.js"] -->|"keypoints / JSON"| Go["API gateway<br/>Go + Gin"]
-    Go -->|"score request"| ML["ML service<br/>FastAPI + ONNX Runtime"]
-    ML -.->|"model artifact"| GCS[("Cloud Storage")]
-    Go -.->|"optional explanation"| Vertex["Vertex AI"]
-    ML -->|"score + 3 metrics"| Go
-    Go --> Web
+    Input["Pose keypoints"] -->|"POST /api/v1/score"| Score["Score route<br/>Go + Gin"]
+    Score -->|"numeric inference"| ML["FastAPI + ONNX Runtime<br/>artifact SHA-256 check"]
+    ML --> Metrics["score · symmetry<br/>power · consistency"]
+    Metrics --> UI["Result UI"]
+    Metrics -.->|"POST /api/v1/explain<br/>4 metrics only"| Explain["Explain route<br/>Go + Gin"]
+    Explain -.->|"generateContent"| Vertex["Vertex AI / Gemini<br/>natural-language summary"]
 
     classDef primary fill:#dff8f1,stroke:#087864,color:#17211f;
     classDef service fill:#f4f1e9,stroke:#60706b,color:#17211f;
     classDef optional fill:#f7f7f4,stroke:#a8b0ad,color:#58635f,stroke-dasharray:5 4;
-    class Web primary;
-    class Go,ML service;
-    class GCS,Vertex optional;
+    class Input,Metrics,UI primary;
+    class Score,ML service;
+    class Explain,Vertex optional;
 ```
 
-UI・ゲートウェイ・推論を分けたことで責務は明確になりました。一方、短期PoCとしてはサービス間契約、環境変数、デバッグ経路が増え、構成を分けること自体のコストも学ぶ結果になりました。
+`/score` と `/explain` は意図的に独立しています。Geminiへraw keypointsは渡さず、スコアの決定にも使いません。そのため、生成的な説明を使わない場合でも数値結果は単独で成立します。UI・ゲートウェイ・推論を分けたことで責務は明確になった一方、短期PoCとしてはサービス間契約、環境変数、デバッグ経路が増え、構成を分けること自体のコストも学ぶ結果になりました。
+
+**Code evidence:** [score / explain routes](services/api-go/main.go#L131-L143) · [ONNX artifact verification and inference](services/ml_py/model.py#L23-L54) · [Gemini request and response handling](services/api-go/main.go#L327-L460)
 
 ## 当時の選択と、今なら変えること
 
@@ -79,6 +85,7 @@ UI・ゲートウェイ・推論を分けたことで責務は明確になりま
 | --- | --- | --- |
 | Next.js・Go・Pythonを別サービス化 | 言語ごとの責務は明確になるが、境界の数だけ契約と障害点が増える | 最初はWeb/APIと推論の二層に絞り、独立して伸ばす理由ができてから分割する |
 | ONNX Runtimeで推論 | 配布形式を揃えられる一方、前処理と入出力shapeもモデル契約の一部になる | exportからAPI応答までを固定fixtureで通すスモークテストを先に作る |
+| 数値推論と生成説明を別API化 | 評価の再現性を保ったまま、説明モデルやpromptを交換できる | score schemaとprompt versionを記録し、説明不能時のfallbackも定義する |
 | キーポイント中心の入力 | データを小さくできるが、座標系・fps・点数の定義が暗黙だと再現性が落ちる | schema versionと正規化ルールを明示し、境界で厳密に検証する |
 | TerraformとCloud Buildまで実装 | アプリ以外の運用面を学べたが、PoCの検証対象が広がった | 先にローカル再現性と一本のデプロイ経路を完成させ、IaCは必要な範囲から育てる |
 | health・ログ・SLOを後半に追加 | 動くことと、状態を説明できることは別だった | 最小限の観測項目と失敗時の確認手順を最初に決める |
@@ -88,9 +95,10 @@ UI・ゲートウェイ・推論を分けたことで責務は明確になりま
 1. Next.jsでWebの入口とAPI routeを作る
 2. PyTorchモデルをONNXへ書き出し、FastAPIで推論する
 3. Go gatewayで認証・routing・timeoutをまとめる
-4. Docker・Cloud Run・Terraform・Cloud Buildをつなぐ
-5. health / readiness、run ID、構造化ログ、SLO、runbookを追加する
-6. 実装済み・計画・振り返りを分けて、この学習ログへ整理する
+4. 数値結果とは別のexplain routeを設け、Vertex AI / Geminiで説明を生成する
+5. Docker・Cloud Run・Terraform・Cloud Buildをつなぐ
+6. health / readiness、run ID、構造化ログ、SLO、runbookを追加する
+7. 実装済み・計画・振り返りを分けて、この学習ログへ整理する
 
 ## ローカルで記録ページを見る
 
